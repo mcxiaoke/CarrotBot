@@ -1,8 +1,9 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { logger } from './logger.js';
 import { getLanService } from './router/lan_service.js';
-import { queryMessages, getMessageById, countMessages, getStats, deleteMessagesBefore, type MessageQuery, type MessageRecord } from './storage/database.js';
+import { queryMessages, getMessageById, countMessages, getStats, deleteMessagesBefore, type MessageQuery } from './storage/database.js';
 import { getCachedFiles, deleteCachedFile, clearCacheBefore, getCacheStats } from './storage/cache.js';
+import { pushService, type PushJob } from './services/push.js';
 
 export async function createServer(): Promise<FastifyInstance> {
   const fastify = Fastify({
@@ -115,6 +116,46 @@ export async function createServer(): Promise<FastifyInstance> {
       return { success: deleted };
     });
   }, { prefix: '/cache' });
+
+  fastify.register(async (instance) => {
+    instance.get('/jobs', async () => {
+      const jobs = pushService.getJobs();
+      return { success: true, count: jobs.length, jobs };
+    });
+
+    instance.get('/jobs/:id', async (request) => {
+      const params = request.params as { id: string };
+      const job = pushService.getJob(params.id);
+      if (!job) {
+        return { success: false, error: 'Job not found' };
+      }
+      return { success: true, job };
+    });
+
+    instance.post('/jobs/:id/execute', async (request) => {
+      const params = request.params as { id: string };
+      const success = await pushService.executeJob(params.id);
+      return { success };
+    });
+
+    instance.post('/jobs/:id/enable', async (request) => {
+      const params = request.params as { id: string };
+      const success = pushService.enableJob(params.id);
+      return { success };
+    });
+
+    instance.post('/jobs/:id/disable', async (request) => {
+      const params = request.params as { id: string };
+      const success = pushService.disableJob(params.id);
+      return { success };
+    });
+
+    instance.delete('/jobs/:id', async (request) => {
+      const params = request.params as { id: string };
+      const success = pushService.removeJob(params.id);
+      return { success };
+    });
+  }, { prefix: '/push' });
 
   return fastify;
 }

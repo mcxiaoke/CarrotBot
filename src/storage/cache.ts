@@ -24,10 +24,12 @@ export function initCache(config: CacheConfig): void {
   logger.info(`Cache initialized: ${cachePath}`);
 }
 
-function getDatePath(): string {
+function getDatePath(platform?: string): string {
   const now = new Date();
   const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  const dir = join(cachePath, 'media', dateStr);
+  const dir = platform
+    ? join(cachePath, 'media', platform, dateStr)
+    : join(cachePath, 'media', dateStr);
   mkdirSync(dir, { recursive: true });
   return dir;
 }
@@ -60,23 +62,25 @@ function getExtensionFromMime(mime: string): string {
 export async function downloadMedia(
   url: string,
   type: 'image' | 'voice' | 'video' | 'file',
-  aesKey?: string
+  aesKey?: string,
+  platform?: string
 ): Promise<{ path: string; filename: string; size: number }> {
-  const datePath = getDatePath();
+  const datePath = getDatePath(platform);
   const ext = getExtensionFromUrl(url, type === 'image' ? 'jpg' : type === 'voice' ? 'amr' : type === 'video' ? 'mp4' : 'bin');
   const filename = generateFilename(type, ext);
   const filePath = join(datePath, filename);
 
   try {
+    logger.debug({ url, type, platform }, 'Downloading media');
     const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
     let buffer = Buffer.from(response.data);
 
     await writeFile(filePath, buffer);
 
-    logger.debug(`Downloaded media: ${filePath} (${buffer.length} bytes)`);
+    logger.debug({ path: filePath, size: buffer.length, platform }, 'Downloaded media');
     return { path: filePath, filename, size: buffer.length };
   } catch (error) {
-    logger.error({ error, url }, 'Failed to download media');
+    logger.error({ error, url, platform }, 'Failed to download media');
     throw error;
   }
 }
@@ -84,42 +88,52 @@ export async function downloadMedia(
 export async function saveBuffer(
   buffer: Buffer,
   type: 'image' | 'voice' | 'video' | 'file',
-  ext?: string
+  ext?: string,
+  platform?: string
 ): Promise<{ path: string; filename: string; size: number }> {
-  const datePath = getDatePath();
+  const datePath = getDatePath(platform);
   const actualExt = ext || (type === 'image' ? 'jpg' : type === 'voice' ? 'amr' : type === 'video' ? 'mp4' : 'bin');
   const filename = generateFilename(type, actualExt);
   const filePath = join(datePath, filename);
 
   await writeFile(filePath, buffer);
 
-  logger.debug(`Saved buffer: ${filePath} (${buffer.length} bytes)`);
+  logger.debug({ path: filePath, size: buffer.length, platform }, 'Saved buffer');
   return { path: filePath, filename, size: buffer.length };
 }
 
-export function getCachedFiles(): CachedFile[] {
+export function getCachedFiles(platform?: string): CachedFile[] {
   const mediaPath = join(cachePath, 'media');
   if (!existsSync(mediaPath)) return [];
 
   const files: CachedFile[] = [];
-  const dateDirs = readdirSync(mediaPath);
-
-  for (const dateDir of dateDirs) {
-    const datePath = join(mediaPath, dateDir);
-    const stat = statSync(datePath);
-    if (!stat.isDirectory()) continue;
-
-    const dayFiles = readdirSync(datePath);
-    for (const file of dayFiles) {
-      const filePath = join(datePath, file);
-      const fileStat = statSync(filePath);
-      files.push({
-        path: filePath,
-        filename: file,
-        size: fileStat.size,
-        createdAt: new Date(fileStat.birthtime),
-      });
+  
+  const collectFiles = (dir: string) => {
+    if (!existsSync(dir)) return;
+    const entries = readdirSync(dir);
+    
+    for (const entry of entries) {
+      const entryPath = join(dir, entry);
+      const stat = statSync(entryPath);
+      
+      if (stat.isDirectory()) {
+        collectFiles(entryPath);
+      } else {
+        files.push({
+          path: entryPath,
+          filename: entry,
+          size: stat.size,
+          createdAt: new Date(stat.birthtime),
+        });
+      }
     }
+  };
+
+  if (platform) {
+    const platformPath = join(mediaPath, platform);
+    collectFiles(platformPath);
+  } else {
+    collectFiles(mediaPath);
   }
 
   return files.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -129,7 +143,7 @@ export function deleteCachedFile(path: string): boolean {
   try {
     if (existsSync(path)) {
       unlinkSync(path);
-      logger.debug(`Deleted cached file: ${path}`);
+      logger.debug({ path }, 'Deleted cached file');
       return true;
     }
     return false;
@@ -139,42 +153,71 @@ export function deleteCachedFile(path: string): boolean {
   }
 }
 
-export function clearCacheBefore(date: string): number {
+export function clearCacheBefore(date: string, platform?: string): number {
   const mediaPath = join(cachePath, 'media');
   if (!existsSync(mediaPath)) return 0;
 
   let deleted = 0;
-  const dateDirs = readdirSync(mediaPath);
 
-  for (const dateDir of dateDirs) {
-    if (dateDir < date) {
-      const dirPath = join(mediaPath, dateDir);
-      const files = readdirSync(dirPath);
-      for (const file of files) {
-        unlinkSync(join(dirPath, file));
+  const clearDir = (dir: string, isPlatformDir: boolean = false) => {
+    if (!existsSync(dir)) return;
+    const entries = readdirSync(dir);
+
+    for (const entry of entries) {
+      const entryPath = join(dir, entry);
+      const stat = statSync(entryPath);
+
+      if (stat.isDirectory()) {
+        if (isPlatformDir || entry < date) {
+          clearDir(entryPath);
+          try {
+            rmdirSync(entryPath);
+            logger.info({ dir: entryPath }, 'Cleared cache directory');
+          } catch {
+            // Directory not empty, ignore
+          }
+        }
+      } else if (!isPlatformDir && entry < date) {
+        unlinkSync(entryPath);
         deleted++;
       }
-      rmdirSync(dirPath);
-      logger.info(`Cleared cache directory: ${dirPath}`);
     }
+  };
+
+  if (platform) {
+    const platformPath = join(mediaPath, platform);
+    clearDir(platformPath, true);
+  } else {
+    clearDir(mediaPath);
   }
 
   return deleted;
 }
 
-export function getCacheStats(): { totalFiles: number; totalSize: number; byType: Record<string, number> } {
-  const files = getCachedFiles();
+export function getCacheStats(platform?: string): { totalFiles: number; totalSize: number; byType: Record<string, number>; byPlatform: Record<string, number> } {
+  const files = getCachedFiles(platform);
   const byType: Record<string, number> = {};
+  const byPlatform: Record<string, number> = {};
 
   for (const file of files) {
     const type = file.filename.split('_')[0] || 'unknown';
     byType[type] = (byType[type] || 0) + 1;
+
+    const pathParts = file.path.split(/[/\\]/);
+    const mediaIndex = pathParts.findIndex(p => p === 'media');
+    if (mediaIndex >= 0 && pathParts[mediaIndex + 1]) {
+      const potentialPlatform = pathParts[mediaIndex + 1];
+      if (!potentialPlatform.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        byPlatform[potentialPlatform] = (byPlatform[potentialPlatform] || 0) + 1;
+      }
+    }
   }
 
   return {
     totalFiles: files.length,
     totalSize: files.reduce((sum, f) => sum + f.size, 0),
     byType,
+    byPlatform,
   };
 }
 

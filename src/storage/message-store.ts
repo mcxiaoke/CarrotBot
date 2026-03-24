@@ -8,6 +8,9 @@ export interface MessageStoreConfig {
   cachePath: string;
 }
 
+export type WeComDownloadFn = (url: string, aesKey: string) => Promise<{ buffer: Buffer; filename?: string }>;
+export type TelegramDownloadFn = (fileId: string) => Promise<{ buffer: Buffer; filename?: string }>;
+
 let initialized = false;
 
 export function initMessageStore(config: MessageStoreConfig): void {
@@ -26,45 +29,73 @@ export function closeMessageStore(): void {
 
 export async function saveIncomingMessage(
   msg: StandardMessage,
-  downloadMediaFn?: (url: string, aesKey: string) => Promise<{ buffer: Buffer; filename?: string }>
+  downloadMediaFn?: WeComDownloadFn | TelegramDownloadFn
 ): Promise<number> {
   let mediaPath: string | null = null;
   const raw = msg.raw as Record<string, unknown>;
   const body = raw?.body as Record<string, unknown> || {};
-  const msgid = body.msgid as string | undefined;
+  const msgid = body.msgid as string | undefined || (raw as { message_id?: number })?.message_id?.toString();
 
-  if (msg.msgType !== 'text' && msg.msgType !== 'event' && msg.mediaUrl && msg.aesKey) {
+  logger.debug({
+    platform: msg.platform,
+    msgType: msg.msgType,
+    mediaUrl: msg.mediaUrl,
+    aesKey: msg.aesKey,
+    hasDownloadFn: !!downloadMediaFn
+  }, 'saveIncomingMessage called');
+
+  if (msg.msgType !== 'text' && msg.msgType !== 'event' && msg.mediaUrl) {
     try {
-      if (downloadMediaFn) {
-        const { buffer, filename } = await downloadMediaFn(msg.mediaUrl, msg.aesKey);
-        const type = msg.msgType as 'image' | 'voice' | 'video' | 'file';
-        const ext = filename?.split('.').pop();
-        const result = await saveBuffer(buffer, type, ext);
-        mediaPath = result.path;
+      const type = msg.msgType as 'image' | 'voice' | 'video' | 'file';
+
+      if (msg.platform === 'telegram') {
+        logger.debug({ fileId: msg.mediaUrl }, 'Downloading Telegram media');
+        if (downloadMediaFn) {
+          const { buffer, filename } = await (downloadMediaFn as TelegramDownloadFn)(msg.mediaUrl);
+          const ext = filename?.split('.').pop();
+          const result = await saveBuffer(buffer, type, ext, msg.platform);
+          mediaPath = result.path;
+        }
+      } else if (msg.platform === 'wecom' && msg.aesKey) {
+        logger.debug({ url: msg.mediaUrl, hasAesKey: !!msg.aesKey }, 'Downloading WeCom media');
+        if (downloadMediaFn) {
+          const { buffer, filename } = await (downloadMediaFn as WeComDownloadFn)(msg.mediaUrl, msg.aesKey);
+          const ext = filename?.split('.').pop();
+          const result = await saveBuffer(buffer, type, ext, msg.platform);
+          mediaPath = result.path;
+        } else {
+          const result = await downloadMedia(msg.mediaUrl, type, msg.aesKey, msg.platform);
+          mediaPath = result.path;
+        }
       } else {
-        const type = msg.msgType as 'image' | 'voice' | 'video' | 'file';
-        const result = await downloadMedia(msg.mediaUrl, type, msg.aesKey);
-        mediaPath = result.path;
+        logger.debug({ platform: msg.platform, msgType: msg.msgType }, 'Media download skipped: unsupported platform or missing keys');
+      }
+
+      if (mediaPath) {
+        logger.info({ platform: msg.platform, msgType: msg.msgType, mediaPath }, 'Media downloaded successfully');
       }
     } catch (error) {
-      logger.error({ error, msgid }, 'Failed to download media for incoming message');
+      logger.error({ error, msgid, platform: msg.platform, msgType: msg.msgType }, 'Failed to download media for incoming message');
     }
   }
+
+  const chatid = body.chatid as string || (raw as { chat?: { id?: number } })?.chat?.id?.toString();
+  const userid = (body.from as Record<string, unknown>)?.userid as string || (raw as { from?: { id?: number } })?.from?.id?.toString();
 
   const id = saveMessage({
     msgid: msgid || undefined,
     platform: msg.platform,
-    chatid: body.chatid as string,
-    userid: (body.from as Record<string, unknown>)?.userid as string,
+    chatid,
+    userid,
     direction: 'in',
     msgtype: msg.msgType,
     content: msg.msgType === 'text' ? msg.content : null,
-    media_id: msg.mediaKey || null,
+    media_id: msg.mediaKey || msg.mediaUrl || null,
     media_path: mediaPath,
     raw: JSON.stringify(raw),
   });
 
-  logger.debug({ id, msgid, msgtype: msg.msgType }, 'Saved incoming message');
+  logger.debug({ id, msgid, msgtype: msg.msgType, platform: msg.platform, mediaPath }, 'Saved incoming message');
   return id;
 }
 
