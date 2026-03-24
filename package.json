@@ -1,0 +1,29 @@
+{
+  "name": "carrotbot",
+  "version": "1.0.0",
+  "description": "bot send and receive message and execute command",
+  "keywords": [
+    "bot",
+    "wechat"
+  ],
+  "license": "Apache-2.0",
+  "author": "mcxiaoke@github.com",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "build": "tsc",
+    "start": "node --env-file=.env dist/index.js"
+  },
+  "dependencies": {
+    "@wecom/aibot-node-sdk": "^1.0.4",
+    "fastify": "^5.2.0",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}
