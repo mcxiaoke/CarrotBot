@@ -6,9 +6,9 @@
     "proseWrap": "always",
     "quoteProps": "as-needed",
     "semi": false,
-    "singleQuote": false,
+    "singleQuote": true,
     "tabWidth": 4,
-    "trailingComma": "all",
+    "trailingComma": "none",
     "useTabs": false,
     "bracketSameLine": false,
     "endOfLine": "lf"

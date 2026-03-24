@@ -24,25 +24,25 @@
 ```typescript
 // 标准消息体 - 系统内部统一流转格式
 interface StandardMessage {
-  platform: string;      // 'wecom' | 'telegram'
-  from: string;          // 发送者/会话 ID
-  content: string;       // 消息文本内容
-  raw: unknown;          // 原始数据（按需使用）
+    platform: string // 'wecom' | 'telegram'
+    from: string // 发送者/会话 ID
+    content: string // 消息文本内容
+    raw: unknown // 原始数据（按需使用）
 }
 
 // 平台适配器接口
 interface IAdapter {
-  readonly platform: string;
-  parseMessage(raw: unknown): StandardMessage;
-  sendMessage(to: string, content: string): Promise<void>;
+    readonly platform: string
+    parseMessage(raw: unknown): StandardMessage
+    sendMessage(to: string, content: string): Promise<void>
 }
 
 // 命令处理器接口
 interface IAction {
-  readonly name: string;           // 命令名称
-  readonly description: string;    // 帮助描述
-  match(content: string): boolean; // 是否匹配此命令
-  execute(msg: StandardMessage, adapter: IAdapter): Promise<void>;
+    readonly name: string // 命令名称
+    readonly description: string // 帮助描述
+    match(content: string): boolean // 是否匹配此命令
+    execute(msg: StandardMessage, adapter: IAdapter): Promise<void>
 }
 ```
 
@@ -81,17 +81,20 @@ PORT=3000
 ## 开发步骤
 
 ### 阶段一：基础框架
+
 1. 初始化项目 (package.json, tsconfig.json)
 2. 定义核心类型 (StandardMessage, IAdapter, IAction)
 3. 实现 MessageRouter
 4. 实现 PingAction / HelpAction
 
 ### 阶段二：企业微信接入
+
 1. 实现 WeComAdapter (使用 @wecom/aibot-node-sdk)
 2. 连接 WebSocket，监听消息
 3. 测试消息收发
 
 ### 阶段三：扩展功能
+
 1. 添加自定义 Actions
 2. 接入 Telegram（按需）
 3. Docker 部署
@@ -120,20 +123,20 @@ npm start
 
 ```typescript
 // src/actions/echo.ts
-import type { IAction, StandardMessage, IAdapter } from '../core/types';
+import type { IAction, StandardMessage, IAdapter } from '../core/types'
 
 export class EchoAction implements IAction {
-  name = 'echo';
-  description = '复读用户消息';
+    name = 'echo'
+    description = '复读用户消息'
 
-  match(content: string): boolean {
-    return content.startsWith('/echo ');
-  }
+    match(content: string): boolean {
+        return content.startsWith('/echo ')
+    }
 
-  async execute(msg: StandardMessage, adapter: IAdapter): Promise<void> {
-    const text = msg.content.replace('/echo ', '');
-    await adapter.sendMessage(msg.from, text);
-  }
+    async execute(msg: StandardMessage, adapter: IAdapter): Promise<void> {
+        const text = msg.content.replace('/echo ', '')
+        await adapter.sendMessage(msg.from, text)
+    }
 }
 ```
 

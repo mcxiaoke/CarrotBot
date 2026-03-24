@@ -63,6 +63,7 @@ npm start
 - `LOG_LEVEL`: 日志级别（默认：info）
 
 可选的 Telegram 代理设置：
+
 - `TELEGRAM_PROXY_TYPE`: http 或 socks
 - `TELEGRAM_PROXY_HOST` + `TELEGRAM_PROXY_PORT`
 
@@ -74,20 +75,21 @@ npm start
 2. 在 `src/index.ts` 中注册：`router.register(new YourAction())`
 
 示例：
+
 ```typescript
-import type { IAction, StandardMessage, IAdapter } from '../core/types.js';
+import type { IAction, StandardMessage, IAdapter } from '../core/types.js'
 
 export class YourAction implements IAction {
-  name = 'your-command';
-  description = '命令描述说明';
+    name = 'your-command'
+    description = '命令描述说明'
 
-  match(content: string): boolean {
-    return content.startsWith('/your-command');
-  }
+    match(content: string): boolean {
+        return content.startsWith('/your-command')
+    }
 
-  async execute(msg: StandardMessage, adapter: IAdapter): Promise<void> {
-    await adapter.sendMessage(msg, '命令执行成功！');
-  }
+    async execute(msg: StandardMessage, adapter: IAdapter): Promise<void> {
+        await adapter.sendMessage(msg, '命令执行成功！')
+    }
 }
 ```
 
@@ -110,6 +112,7 @@ Fastify 服务器提供以下端点：
 ## 数据库结构
 
 SQLite 数据库位于 `${DATA_PATH}/messages.db`，存储：
+
 - 消息历史（平台、发送者、内容、时间戳）
 - 推送任务调度和配置
 - 媒体文件缓存元数据
@@ -126,12 +129,14 @@ SQLite 数据库位于 `${DATA_PATH}/messages.db`，存储：
 ## 部署方式
 
 ### Docker 部署
+
 ```bash
 docker build -t carrotbot .
 docker run -d --env-file .env -p 3000:3000 -v ./data:/app/data carrotbot
 ```
 
 ### PM2 部署
+
 ```bash
 pm2 start dist/index.js --name carrotbot
 ```
