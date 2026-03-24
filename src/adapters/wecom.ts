@@ -2,6 +2,7 @@ import AiBot, { WSClient } from '@wecom/aibot-node-sdk';
 import type { WsFrame, TemplateCard } from '@wecom/aibot-node-sdk';
 import { generateReqId } from '@wecom/aibot-node-sdk';
 import type { IAdapter, StandardMessage, MessageType } from '../core/types.js';
+import { saveIncomingMessage, saveOutgoingMessage } from '../storage/message-store.js';
 import { logger } from '../logger.js';
 
 export interface WeComConfig {
@@ -50,28 +51,28 @@ export class WeComAdapter implements IAdapter {
         msgType = 'image';
         mediaUrl = (body.image as Record<string, string>)?.url;
         mediaKey = (body.image as Record<string, string>)?.key;
-        aesKey = (body.image as Record<string, string>)?.aes_key;
+        aesKey = (body.image as Record<string, string>)?.aeskey;
         break;
       case 'voice':
         content = '[语音]';
         msgType = 'voice';
         mediaUrl = (body.voice as Record<string, string>)?.url;
         mediaKey = (body.voice as Record<string, string>)?.key;
-        aesKey = (body.voice as Record<string, string>)?.aes_key;
+        aesKey = (body.voice as Record<string, string>)?.aeskey;
         break;
       case 'video':
         content = '[视频]';
         msgType = 'video';
         mediaUrl = (body.video as Record<string, string>)?.url;
         mediaKey = (body.video as Record<string, string>)?.key;
-        aesKey = (body.video as Record<string, string>)?.aes_key;
+        aesKey = (body.video as Record<string, string>)?.aeskey;
         break;
       case 'file':
         content = `[文件] ${(body.file as Record<string, string>)?.filename || ''}`;
         msgType = 'file';
         mediaUrl = (body.file as Record<string, string>)?.url;
         mediaKey = (body.file as Record<string, string>)?.key;
-        aesKey = (body.file as Record<string, string>)?.aes_key;
+        aesKey = (body.file as Record<string, string>)?.aeskey;
         break;
       case 'mixed':
         content = '[图文混排]';
@@ -113,6 +114,7 @@ export class WeComAdapter implements IAdapter {
         msgtype: 'text',
         text: { content },
       });
+      await saveOutgoingMessage(msg, 'text', content);
       logger.debug({ to: msg.from, content }, 'Text message sent');
     } catch (err) {
       logger.error({ err, to: msg.from }, 'Failed to send text message');
@@ -127,6 +129,7 @@ export class WeComAdapter implements IAdapter {
         msgtype: 'markdown',
         markdown: { content },
       });
+      await saveOutgoingMessage(msg, 'markdown', content);
       logger.debug({ to: msg.from, content }, 'Markdown message sent');
     } catch (err) {
       logger.error({ err, to: msg.from }, 'Failed to send markdown message');
@@ -138,6 +141,7 @@ export class WeComAdapter implements IAdapter {
     try {
       const frame = msg.raw as WsFrame;
       await this.client.replyMedia(frame, 'image', mediaId);
+      await saveOutgoingMessage(msg, 'image', null, mediaId);
       logger.debug({ to: msg.from, mediaId }, 'Image message sent');
     } catch (err) {
       logger.error({ err, to: msg.from }, 'Failed to send image message');
@@ -149,6 +153,7 @@ export class WeComAdapter implements IAdapter {
     try {
       const frame = msg.raw as WsFrame;
       await this.client.replyMedia(frame, 'voice', mediaId);
+      await saveOutgoingMessage(msg, 'voice', null, mediaId);
       logger.debug({ to: msg.from, mediaId }, 'Voice message sent');
     } catch (err) {
       logger.error({ err, to: msg.from }, 'Failed to send voice message');
@@ -160,6 +165,7 @@ export class WeComAdapter implements IAdapter {
     try {
       const frame = msg.raw as WsFrame;
       await this.client.replyMedia(frame, 'video', mediaId, { title, description });
+      await saveOutgoingMessage(msg, 'video', null, mediaId);
       logger.debug({ to: msg.from, mediaId }, 'Video message sent');
     } catch (err) {
       logger.error({ err, to: msg.from }, 'Failed to send video message');
@@ -171,6 +177,7 @@ export class WeComAdapter implements IAdapter {
     try {
       const frame = msg.raw as WsFrame;
       await this.client.replyMedia(frame, 'file', mediaId);
+      await saveOutgoingMessage(msg, 'file', null, mediaId);
       logger.debug({ to: msg.from, mediaId }, 'File message sent');
     } catch (err) {
       logger.error({ err, to: msg.from }, 'Failed to send file message');
@@ -182,6 +189,7 @@ export class WeComAdapter implements IAdapter {
     try {
       const frame = msg.raw as WsFrame;
       await this.client.replyTemplateCard(frame, card);
+      await saveOutgoingMessage(msg, 'template_card', JSON.stringify(card));
       logger.debug({ to: msg.from }, 'Template card sent');
     } catch (err) {
       logger.error({ err, to: msg.from }, 'Failed to send template card');
@@ -193,6 +201,9 @@ export class WeComAdapter implements IAdapter {
     try {
       const frame = msg.raw as WsFrame;
       await this.client.replyStream(frame, streamId, content, finish);
+      if (finish) {
+        await saveOutgoingMessage(msg, 'stream', content);
+      }
       logger.debug({ to: msg.from, streamId, finish }, 'Stream message sent');
     } catch (err) {
       logger.error({ err, to: msg.from }, 'Failed to send stream message');
@@ -292,48 +303,20 @@ export class WeComAdapter implements IAdapter {
       logger.info('WeCom WebSocket authenticated');
     });
 
-    this.client.on('message.text', (frame: WsFrame) => {
-      this.handleMessage(frame, 'text');
+    this.client.on('message', (frame: WsFrame) => {
+      const body = frame.body as Record<string, unknown>;
+      const msgtype = body.msgtype as string;
+      logger.debug({ msgtype, msgid: body.msgid }, 'Received message');
+      this.handleMessage(frame, msgtype);
     });
 
-    this.client.on('message.image', (frame: WsFrame) => {
-      this.handleMessage(frame, 'image');
-    });
-
-    this.client.on('message.voice', (frame: WsFrame) => {
-      this.handleMessage(frame, 'voice');
-    });
-
-    this.client.on('message.file', (frame: WsFrame) => {
-      this.handleMessage(frame, 'file');
-    });
-
-    this.client.on('message.mixed', (frame: WsFrame) => {
-      this.handleMessage(frame, 'mixed');
-    });
-
-    this.client.on('event.enter_chat', async (frame: WsFrame) => {
-      logger.info({ frame }, 'User entered chat');
-      if (this.onEvent) {
-        this.onEvent({ type: 'enter_chat', frame });
-      }
-      await this.client.replyWelcome(frame, {
-        msgtype: 'text',
-        text: { content: '你好！我是 CarrotBot，发送 /help 查看可用命令。' },
-      });
-    });
-
-    this.client.on('event.template_card_event', (frame: WsFrame) => {
-      logger.info({ frame }, 'Template card event');
-      if (this.onEvent) {
-        this.onEvent({ type: 'template_card_event', frame });
-      }
-    });
-
-    this.client.on('event.feedback_event', (frame: WsFrame) => {
-      logger.info({ frame }, 'User feedback');
-      if (this.onEvent) {
-        this.onEvent({ type: 'feedback_event', frame });
+    this.client.on('event', (frame: WsFrame) => {
+      const body = frame.body as Record<string, unknown>;
+      const eventType = (body.event as Record<string, string>)?.eventtype;
+      logger.debug({ eventType, frame }, 'Received event');
+      
+      if (eventType === 'enter_chat') {
+        this.handleEnterChat(frame);
       }
     });
 
@@ -346,10 +329,32 @@ export class WeComAdapter implements IAdapter {
     });
   }
 
-  private handleMessage(frame: WsFrame, msgtype: string): void {
-    logger.debug({ frame, msgtype }, `Received ${msgtype} message`);
+  private async handleEnterChat(frame: WsFrame): Promise<void> {
+    logger.info({ frame }, 'User entered chat');
+    if (this.onEvent) {
+      this.onEvent({ type: 'enter_chat', frame });
+    }
+    try {
+      await this.client.replyWelcome(frame, {
+        msgtype: 'text',
+        text: { content: '你好！我是 CarrotBot，发送 /help 查看可用命令。' },
+      });
+    } catch (err) {
+      logger.error({ err }, 'Failed to send welcome message');
+    }
+  }
+
+  private async handleMessage(frame: WsFrame, msgtype: string): Promise<void> {
+    const msg = this.parseMessage(frame);
+    
+    try {
+      await saveIncomingMessage(msg, (url, aesKey) => this.downloadFile(url, aesKey));
+      logger.info({ msgtype, msgid: (frame.body as Record<string, unknown>)?.msgid, from: msg.from }, 'Message saved');
+    } catch (err) {
+      logger.error({ err, msgtype, msgid: (frame.body as Record<string, unknown>)?.msgid }, 'Failed to save incoming message');
+    }
+
     if (this.onMessage) {
-      const msg = this.parseMessage(frame);
       this.onMessage(msg);
     }
   }

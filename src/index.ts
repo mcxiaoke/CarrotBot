@@ -6,13 +6,21 @@ import { HelpAction } from './actions/help.js';
 import { DebugAction } from './actions/debug.js';
 import { LanAction } from './actions/lan.js';
 import { initLanService } from './router/lan_service.js';
+import { initMessageStore, closeMessageStore } from './storage/message-store.js';
 import { logger } from './logger.js';
 
 const PORT = parseInt(process.env.PORT || '3123', 10);
 const ROUTER_IP = process.env.ROUTER_IP || '';
 const ROUTER_PASSWORD = process.env.ROUTER_PASSWORD || '';
+const DATA_PATH = process.env.DATA_PATH || './data';
 
 async function main() {
+  initMessageStore({
+    dbPath: `${DATA_PATH}/messages.db`,
+    cachePath: `${DATA_PATH}/cache`,
+  });
+  logger.info('MessageStore initialized');
+
   const router = new MessageRouter();
   router.register(new PingAction());
   router.register(new HelpAction(router));
@@ -46,6 +54,7 @@ async function main() {
   const shutdown = () => {
     logger.info('Shutting down...');
     wecomAdapter.disconnect();
+    closeMessageStore();
     fastify.close().then(() => {
       process.exit(0);
     });
