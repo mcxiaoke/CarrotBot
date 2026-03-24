@@ -1,18 +1,51 @@
+/**
+ * 设备信息和 TP-Link 路由器接口模块
+ * 
+ * 本模块定义了设备信息的数据结构和 TP-Link 路由器的 API 接口。
+ * 支持获取路由器在线设备列表，解析设备信息等功能。
+ */
+
 import axios from 'axios';
 
+/**
+ * TP-Link 路由器密码加密常量
+ * 用于实现路由器的自定义加密算法
+ */
 const STR_B = 'RDpbLfCPsJZ7fiv';
 const STR_C =
   'yLwVl0zKqws7LgKPRQ84Mdt708T1qQ3Ha7xv3H7NyU84p21BriUWBU43odz3iP4rBL3cD02KZciXTysVXiV8ngg6vL48rPJyAUw0HurW20xqxv9aYb4M9wK1Ae0wlro510qXeU07kV57fQMc8L6aLgMLwygtc0F10a0Dg70TOoouyFhdysuRMO51yY5ZlOZZLEal1h0t9YQW0Ko7oBwmCAHoic4HYbUyVeU3sfQ1xtXcPcf1aT303wAQhv66qzW';
 
+/**
+ * WiFi 连接模式映射
+ * 0: 有线连接
+ * 1: 无线连接
+ */
 const WIFI_MODE_MAP: Record<number, string> = { 0: '有线', 1: '无线' };
+
+/**
+ * 物理层模式映射
+ * 4: 2.4G WiFi
+ * 5: 5G WiFi
+ * 6: WiFi6
+ */
 const PHY_MODE_MAP: Record<number, string> = { 0: '未知', 4: '2.4G', 5: '5G', 6: 'WiFi6' };
 
+/**
+ * 格式化速度显示
+ * @param speed - 速度（字节/秒）
+ * @returns 格式化的速度字符串
+ */
 function formatSpeed(speed: number): string {
   if (speed < 1024) return `${speed} B/s`;
   if (speed < 1024 * 1024) return `${(speed / 1024).toFixed(1)} KB/s`;
   return `${(speed / 1024 / 1024).toFixed(2)} MB/s`;
 }
 
+/**
+ * 格式化连接时间显示
+ * @param seconds - 连接时长（秒）
+ * @returns 格式化的时间字符串
+ */
 function formatConnectTime(seconds: number): string {
   if (seconds < 60) return `${seconds}秒`;
   if (seconds < 3600) return `${Math.floor(seconds / 60)}分钟`;
@@ -20,33 +53,84 @@ function formatConnectTime(seconds: number): string {
   return `${Math.floor(seconds / 86400)}天${Math.floor((seconds % 86400) / 3600)}小时`;
 }
 
+/**
+ * 设备信息原始数据接口
+ * 
+ * 对应路由器 API 返回的设备数据格式
+ */
 export interface HostInfoData {
+  /** MAC 地址 */
   mac: string;
+  /** IP 地址 */
   ip: string;
+  /** 主机名（URL 编码） */
   hostname: string;
+  /** IPv6 地址 */
   ipv6: string;
+  /** 上传速度（字节/秒） */
   upSpeed: number;
+  /** 下载速度（字节/秒） */
   downSpeed: number;
+  /** 连接时长（秒） */
   connectTime: number;
+  /** WiFi 模式：0-有线，1-无线 */
   wifiMode: number;
+  /** 物理层模式：4-2.4G，5-5G，6-WiFi6 */
   phyMode: number;
+  /** 是否为当前设备 */
   isCurHost: boolean;
+  /** 是否被屏蔽 */
   blocked: boolean;
 }
 
+/**
+ * 设备信息类
+ * 
+ * 封装设备的详细信息，提供格式化的属性访问。
+ * 
+ * @example
+ * ```typescript
+ * const host = new HostInfo({
+ *   mac: 'AA-BB-CC-DD-EE-FF',
+ *   ip: '192.168.1.100',
+ *   hostname: 'iPhone',
+ *   wifiMode: 1,
+ *   phyMode: 5
+ * });
+ * 
+ * console.log(host.hostnameDecoded); // 'iPhone'
+ * console.log(host.wifiType);        // '无线'
+ * console.log(host.phyType);         // '5G'
+ * ```
+ */
 export class HostInfo {
+  /** MAC 地址 */
   mac: string;
+  /** IP 地址 */
   ip: string;
+  /** 主机名（URL 编码） */
   hostname: string;
+  /** IPv6 地址 */
   ipv6: string;
+  /** 上传速度（字节/秒） */
   upSpeed: number;
+  /** 下载速度（字节/秒） */
   downSpeed: number;
+  /** 连接时长（秒） */
   connectTime: number;
+  /** WiFi 模式 */
   wifiMode: number;
+  /** 物理层模式 */
   phyMode: number;
+  /** 是否为当前设备 */
   isCurHost: boolean;
+  /** 是否被屏蔽 */
   blocked: boolean;
 
+  /**
+   * 创建设备信息实例
+   * @param data - 设备数据（部分可选）
+   */
   constructor(data: Partial<HostInfoData> = {}) {
     this.mac = data.mac ?? '';
     this.ip = data.ip ?? '';
@@ -61,30 +145,59 @@ export class HostInfo {
     this.blocked = data.blocked ?? false;
   }
 
+  /**
+   * 获取连接类型描述
+   * @returns '有线' 或 '无线'
+   */
   get wifiType(): string {
     return WIFI_MODE_MAP[this.wifiMode] ?? '未知';
   }
 
+  /**
+   * 获取物理层类型描述
+   * @returns '2.4G'、'5G'、'WiFi6' 或 '未知'
+   */
   get phyType(): string {
     return PHY_MODE_MAP[this.phyMode] ?? '未知';
   }
 
+  /**
+   * 获取解码后的主机名
+   * @returns 解码后的主机名，未知设备返回 '未知设备'
+   */
   get hostnameDecoded(): string {
     return this.hostname ? decodeURIComponent(this.hostname) : '未知设备';
   }
 
+  /**
+   * 获取格式化的连接时长
+   * @returns 格式化的时间字符串
+   */
   get connectTimeStr(): string {
     return formatConnectTime(this.connectTime);
   }
 
+  /**
+   * 获取格式化的上传速度
+   * @returns 格式化的速度字符串
+   */
   get upSpeedStr(): string {
     return formatSpeed(this.upSpeed);
   }
 
+  /**
+   * 获取格式化的下载速度
+   * @returns 格式化的速度字符串
+   */
   get downSpeedStr(): string {
     return formatSpeed(this.downSpeed);
   }
 
+  /**
+   * 从 API 数据创建设备信息实例
+   * @param data - 路由器 API 返回的设备数据
+   * @returns 设备信息实例
+   */
   static fromApiData(data: Record<string, string>): HostInfo {
     return new HostInfo({
       mac: data.mac ?? '',
@@ -101,6 +214,10 @@ export class HostInfo {
     });
   }
 
+  /**
+   * 转换为 JSON 对象
+   * @returns 包含所有属性的 JSON 对象
+   */
   toJSON() {
     return {
       mac: this.mac,
@@ -123,21 +240,60 @@ export class HostInfo {
   }
 }
 
+/**
+ * TP-Link 路由器配置接口
+ */
 export interface TPLinkRouterOptions {
+  /** 路由器 IP 地址 */
   ip: string;
+  /** 路由器管理密码 */
   password: string;
 }
 
+/**
+ * TP-Link 路由器类
+ * 
+ * 提供 TP-Link 路由器的 API 接口，支持：
+ * - 登录认证
+ * - 获取在线设备列表
+ * - 查询设备信息
+ * 
+ * @example
+ * ```typescript
+ * const router = new TPLinkRouter({
+ *   ip: '192.168.1.1',
+ *   password: 'admin'
+ * });
+ * 
+ * const hosts = await router.getHosts();
+ * const host = await router.findHostByMac('AA-BB-CC-DD-EE-FF');
+ * ```
+ */
 export class TPLinkRouter {
+  /** 路由器 IP 地址 */
   private ip: string;
+  /** 路由器管理密码 */
   private password: string;
+  /** 登录会话令牌 */
   private stok: string | null = null;
 
+  /**
+   * 创建 TP-Link 路由器实例
+   * @param options - 路由器配置
+   */
   constructor(options: TPLinkRouterOptions) {
     this.ip = options.ip;
     this.password = options.password;
   }
 
+  /**
+   * 加密密码
+   * 
+   * 使用 TP-Link 自定义算法加密密码。
+   * 
+   * @param password - 原始密码
+   * @returns 加密后的密码字符串
+   */
   private securityEncode(password: string): string {
     let result = '';
     const pwdLen = password.length;
@@ -153,6 +309,13 @@ export class TPLinkRouter {
     return result;
   }
 
+  /**
+   * 登录路由器
+   * 
+   * 使用加密后的密码进行登录，获取会话令牌。
+   * 
+   * @returns 登录是否成功
+   */
   async login(): Promise<boolean> {
     const url = `http://${this.ip}/`;
     const payload = {
@@ -174,6 +337,13 @@ export class TPLinkRouter {
     return false;
   }
 
+  /**
+   * 确保已登录
+   * 
+   * 检查是否有有效的会话令牌，如果没有则尝试登录。
+   * 
+   * @returns 是否已登录
+   */
   private async ensureLogin(): Promise<boolean> {
     if (!this.stok) {
       return await this.login();
@@ -181,6 +351,14 @@ export class TPLinkRouter {
     return true;
   }
 
+  /**
+   * 发送 API 请求
+   * 
+   * 向路由器发送 API 请求，处理登录状态和错误。
+   * 
+   * @param payload - 请求载荷
+   * @returns 响应数据，失败返回 null
+   */
   private async request(payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
     if (!(await this.ensureLogin())) {
       return null;
@@ -190,6 +368,7 @@ export class TPLinkRouter {
     try {
       const response = await axios.post(url, payload, { timeout: 5000 });
       const data = response.data;
+      // 检查错误码，非零表示需要重新登录
       if ('error_code' in data && data.error_code !== 0) {
         this.stok = null;
         return null;
@@ -202,6 +381,13 @@ export class TPLinkRouter {
     }
   }
 
+  /**
+   * 获取在线设备列表
+   * 
+   * 从路由器获取当前在线的所有设备信息。
+   * 
+   * @returns 设备信息列表
+   */
   async getHosts(): Promise<HostInfo[]> {
     const payload = {
       system: { name: ['sys'] },
@@ -216,6 +402,7 @@ export class TPLinkRouter {
     }
 
     const hosts: HostInfo[] = [];
+    // 解析设备列表数据
     const hostList = (data.hosts_info as Record<string, unknown>)?.host_info as Array<Record<string, Record<string, string>>> ?? [];
     for (const item of hostList) {
       for (const hostKey in item) {
@@ -232,7 +419,13 @@ export class TPLinkRouter {
     return hosts;
   }
 
+  /**
+   * 根据 MAC 地址查找设备
+   * @param mac - MAC 地址
+   * @returns 设备信息，未找到返回 null
+   */
   async findHostByMac(mac: string): Promise<HostInfo | null> {
+    // 标准化 MAC 地址格式（使用横杠分隔）
     const normalizedMac = mac.toUpperCase().replace(/:/g, '-');
     for (const host of await this.getHosts()) {
       if (host.mac.toUpperCase() === normalizedMac) {
@@ -242,6 +435,11 @@ export class TPLinkRouter {
     return null;
   }
 
+  /**
+   * 根据 IP 地址查找设备
+   * @param ip - IP 地址
+   * @returns 设备信息，未找到返回 null
+   */
   async findHostByIp(ip: string): Promise<HostInfo | null> {
     for (const host of await this.getHosts()) {
       if (host.ip === ip) {
