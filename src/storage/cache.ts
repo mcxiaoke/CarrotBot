@@ -140,7 +140,7 @@ export async function downloadMedia(
   try {
     logger.debug({ url, type, platform }, 'Downloading media');
     const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 30000 });
-    let buffer = Buffer.from(response.data);
+    const buffer = Buffer.from(response.data);
 
     await writeFile(filePath, buffer);
 

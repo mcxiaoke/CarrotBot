@@ -129,10 +129,9 @@ export class TelegramAdapter implements IAdapter {
    */
   parseMessage(raw: unknown): StandardMessage {
     const msg = raw as TelegramBot.Message;
-    let content = '';
-    let msgType: MessageType = 'text';
+    let content = "";
+    let msgType: MessageType = "text";
     let mediaUrl: string | undefined;
-    let mediaKey: string | undefined;
 
     // 根据消息类型解析不同的消息内容
     if (msg.text) {
@@ -186,7 +185,6 @@ export class TelegramAdapter implements IAdapter {
       msgType,
       raw,
       mediaUrl,
-      mediaKey,
     };
   }
 
