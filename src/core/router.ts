@@ -26,14 +26,22 @@ export class MessageRouter {
           await action.execute(msg, adapter);
         } catch (err) {
           logger.error({ err, action: action.name }, 'Action execution failed');
-          await adapter.sendMessage(msg, `执行命令时出错: ${err}`);
+          try {
+            await adapter.sendMessage(msg, `执行命令时出错: ${err}`);
+          } catch (sendErr) {
+            logger.error({ sendErr }, 'Failed to send error message');
+          }
         }
         return;
       }
     }
 
     if (this.defaultAction) {
-      await this.defaultAction.execute(msg, adapter);
+      try {
+        await this.defaultAction.execute(msg, adapter);
+      } catch (err) {
+        logger.error({ err, action: 'default' }, 'Default action execution failed');
+      }
     } else {
       logger.warn({ msg }, 'No action matched and no default action set');
     }

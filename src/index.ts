@@ -4,15 +4,31 @@ import { WeComAdapter } from './adapters/wecom.js';
 import { PingAction } from './actions/ping.js';
 import { HelpAction } from './actions/help.js';
 import { DebugAction } from './actions/debug.js';
+import { LanAction } from './actions/lan.js';
+import { initLanService } from './router/lan_service.js';
 import { logger } from './logger.js';
 
 const PORT = parseInt(process.env.PORT || '3123', 10);
+const ROUTER_IP = process.env.ROUTER_IP || '';
+const ROUTER_PASSWORD = process.env.ROUTER_PASSWORD || '';
 
 async function main() {
   const router = new MessageRouter();
   router.register(new PingAction());
   router.register(new HelpAction(router));
+  router.register(new LanAction());
   router.setDefault(new DebugAction());
+
+  if (ROUTER_IP && ROUTER_PASSWORD) {
+    await initLanService({
+      routerIp: ROUTER_IP,
+      routerPassword: ROUTER_PASSWORD,
+      refreshInterval: 10_000,
+    });
+    logger.info('LAN Service initialized');
+  } else {
+    logger.warn('LAN Service disabled: ROUTER_IP or ROUTER_PASSWORD not set');
+  }
 
   const wecomAdapter = new WeComAdapter({
     botId: process.env.WECOM_BOT_ID || '',
