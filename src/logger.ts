@@ -5,6 +5,13 @@
  * 日志格式：[时间] [级别] 消息
  */
 
+import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc.js'
+import timezone from 'dayjs/plugin/timezone.js'
+
+dayjs.extend(utc)
+dayjs.extend(timezone)
+
 /**
  * 日志级别类型
  */
@@ -33,10 +40,10 @@ const currentLevel = LOG_LEVELS[(process.env.LOG_LEVEL as LogLevel) || 'info']
 /**
  * 格式化时间戳
  *
- * @returns 格式化的时间字符串，格式：YYYY-MM-DD HH:mm:ss
+ * @returns 格式化的时间字符串，格式：YYYY-MM-DD HH:mm:ss（本地时间）
  */
 function formatTime(): string {
-    return new Date().toISOString().replace('T', ' ').substring(0, 19)
+    return dayjs().format('YYYY-MM-DD HH:mm:ss')
 }
 
 /**

@@ -98,7 +98,11 @@ const API_DOCS: ApiEndpoint[] = [
         path: '/api/msg/messages',
         description: '查询消息列表（支持分页和筛选）',
         params: {
-            platform: { type: 'string', required: false, description: '按平台筛选 (wecom/telegram)' },
+            platform: {
+                type: 'string',
+                required: false,
+                description: '按平台筛选 (wecom/telegram)'
+            },
             chatid: { type: 'string', required: false, description: '按会话 ID 筛选' },
             userid: { type: 'string', required: false, description: '按用户 ID 筛选' },
             direction: { type: 'string', required: false, description: '按消息方向筛选 (in/out)' },
@@ -275,8 +279,17 @@ const API_DOCS: ApiEndpoint[] = [
         description: '发送消息到指定平台',
         body: {
             platform: { type: 'string', required: true, description: '目标平台 (wecom/telegram)' },
-            content: { type: 'string', required: true, description: '消息内容' },
-            type: { type: 'string', required: false, description: '内容类型 (text/markdown)，默认 text' }
+            content: { type: 'string', required: true, description: '消息内容 (文本或图片URL)' },
+            msgtype: {
+                type: 'string',
+                required: false,
+                description: '消息类型 (text/markdown/image)，默认 text'
+            },
+            type: {
+                type: 'string',
+                required: false,
+                description: '内容类型 (text/markdown/image)，默认 text (已弃用，请使用 msgtype)'
+            }
         },
         response: {
             success: { type: 'boolean', description: '是否发送成功' },
@@ -289,8 +302,17 @@ const API_DOCS: ApiEndpoint[] = [
         path: '/api/push/send/all',
         description: '广播消息到所有可用平台',
         body: {
-            content: { type: 'string', required: true, description: '消息内容' },
-            type: { type: 'string', required: false, description: '内容类型 (text/markdown)，默认 text' }
+            content: { type: 'string', required: true, description: '消息内容 (文本或图片URL)' },
+            msgtype: {
+                type: 'string',
+                required: false,
+                description: '消息类型 (text/markdown/image)，默认 text'
+            },
+            type: {
+                type: 'string',
+                required: false,
+                description: '内容类型 (text/markdown/image)，默认 text (已弃用，请使用 msgtype)'
+            }
         },
         response: {
             success: { type: 'boolean', description: '是否全部发送成功' },
@@ -317,10 +339,17 @@ const API_DOCS: ApiEndpoint[] = [
  */
 export async function createServer(): Promise<FastifyInstance> {
     const fastify = Fastify({
-        logger: false
+        logger: false,
+        bodyLimit: 10485760
     })
 
-    fastify.addHook('onRequest', authHook)
+    fastify.setErrorHandler((error, request, reply) => {
+        const err = error instanceof Error ? error : new Error(String(error))
+        logger.error({ error: err.message, stack: err.stack }, 'Request error')
+        reply.code(500).send({ success: false, error: err.message })
+    })
+
+    fastify.addHook('preHandler', authHook)
 
     /**
      * 服务信息接口

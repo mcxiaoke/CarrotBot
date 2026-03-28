@@ -12,7 +12,7 @@
     "main": "dist/index.js",
     "scripts": {
         "dev": "tsx watch --env-file=.env src/index.ts",
-        "build": "tsc",
+        "build": "tsc && node -e \"require('fs').cpSync('src/templates','dist/router/templates',{recursive:true})\"",
         "start": "node --env-file=.env dist/index.js",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
@@ -20,6 +20,7 @@
         "check": "npm run lint && npm run build"
     },
     "dependencies": {
+        "@fastify/multipart": "^9.4.0",
         "@wecom/aibot-node-sdk": "^1.0.4",
         "axios": "^1.8.3",
         "better-sqlite3": "^11.9.1",

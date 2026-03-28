@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CarrotBot Admin - Send</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .nav {
+            margin-bottom: 20px;
+        }
+
+        .nav a {
+            display: inline-block;
+            padding: 8px 16px;
+            margin-right: 10px;
+            background: #4a90d9;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+
+        .nav a:hover {
+            background: #3a7bc8;
+        }
+
+        .nav a.active {
+            background: #2d6ba8;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            max-width: 600px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        select,
+        input[type="text"],
+        input[type="file"],
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: monospace;
+        }
+
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .radio-group label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: normal;
+            cursor: pointer;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            background: #4a90d9;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .btn:hover {
+            background: #3a7bc8;
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .result {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .result.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            display: block;
+        }
+
+        .result.error {
+            background: #ffebee;
+            color: #c62828;
+            display: block;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .input-group {
+            display: none;
+        }
+
+        .input-group.active {
+            display: block;
+        }
+
+        .tab-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .tab-btn {
+            padding: 6px 12px;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .tab-btn.active {
+            background: #4a90d9;
+            color: white;
+        }
+
+        .preview {
+            margin-top: 10px;
+            max-width: 200px;
+            max-height: 200px;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="nav">
+        <a href="/admin/messages">Messages</a>
+        <a href="/admin/send{{TOKEN_QUERY}}" class="active">Send</a>
+    </nav>
+    <h1>🥕 Send Message</h1>
+    <div class="card">
+        <form id="sendForm">
+            <div class="form-group">
+                <label>Platform</label>
+                <select id="platform">
+                    <option value="wecom">WeCom (企业微信)</option>
+                    <option value="telegram">Telegram</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Message Type</label>
+                <div class="radio-group">
+                    <label><input type="radio" name="msgType" value="text" checked> Text</label>
+                    <label><input type="radio" name="msgType" value="markdown"> Markdown</label>
+                    <label><input type="radio" name="msgType" value="image"> Image</label>
+                    <label><input type="radio" name="msgType" value="file"> File</label>
+                </div>
+            </div>
+
+            <div class="form-group input-group active" id="textGroup">
+                <label>Content</label>
+                <textarea id="textContent" placeholder="Enter your message..."></textarea>
+            </div>
+
+            <div class="form-group input-group" id="markdownGroup">
+                <label>Markdown Content</label>
+                <textarea id="markdownContent" placeholder="Enter markdown content..."></textarea>
+                <div class="hint" id="markdownHint"></div>
+            </div>
+
+            <div class="form-group input-group" id="imageGroup">
+                <div class="tab-group">
+                    <button type="button" class="tab-btn active" data-tab="url">URL</button>
+                    <button type="button" class="tab-btn" data-tab="file">File</button>
+                </div>
+                <div class="input-group active" id="imageUrlInput">
+                    <label>Image URL</label>
+                    <input type="text" id="imageUrl" placeholder="https://example.com/image.jpg">
+                </div>
+                <div class="input-group" id="imageFileInput">
+                    <label>Image File</label>
+                    <input type="file" id="imageFile" accept="image/*">
+                    <div class="hint" id="imageHint"></div>
+                    <img id="preview" class="preview" alt="preview">
+                </div>
+            </div>
+
+            <div class="form-group input-group" id="fileGroup">
+                <div class="tab-group">
+                    <button type="button" class="tab-btn active" data-tab="upload">Upload</button>
+                    <button type="button" class="tab-btn" data-tab="url">URL</button>
+                </div>
+                <div class="input-group active" id="fileUploadInput">
+                    <label>File</label>
+                    <input type="file" id="fileInput">
+                    <div class="hint" id="fileHint"></div>
+                </div>
+                <div class="input-group" id="fileUrlInput">
+                    <label>File URL</label>
+                    <input type="text" id="fileUrl" placeholder="https://example.com/document.pdf">
+                </div>
+            </div>
+
+            <button type="submit" class="btn" id="submitBtn">Send</button>
+        </form>
+        <div id="result" class="result"></div>
+    </div>
+    <script>
+        const API_TOKEN = "{{API_TOKEN}}";
+        const platformSelect = document.getElementById('platform');
+        const resultDiv = document.getElementById('result');
+        const submitBtn = document.getElementById('submitBtn');
+
+        const textGroup = document.getElementById('textGroup');
+        const markdownGroup = document.getElementById('markdownGroup');
+        const imageGroup = document.getElementById('imageGroup');
+        const fileGroup = document.getElementById('fileGroup');
+
+        let fileData = null;
+
+        const hints = {
+            wecom: {
+                markdown: 'Supports: headings, bold, links, code, quotes, colored text',
+                image: 'Max 2MB as image, larger files auto-converted to file (max 20MB)',
+                file: 'Max 20MB, auto-upload and send'
+            },
+            telegram: {
+                markdown: 'Using MarkdownV2 format',
+                image: 'Max 10MB',
+                file: 'Max 50MB'
+            }
+        };
+
+        function updateHints() {
+            const platform = platformSelect.value;
+            document.getElementById('markdownHint').textContent = hints[platform].markdown;
+            document.getElementById('imageHint').textContent = hints[platform].image;
+            document.getElementById('fileHint').textContent = hints[platform].file;
+        }
+
+        function updateMessageTypeUI() {
+            const msgType = document.querySelector('input[name="msgType"]:checked')?.value || 'text';
+
+            textGroup.classList.remove('active');
+            markdownGroup.classList.remove('active');
+            imageGroup.classList.remove('active');
+            fileGroup.classList.remove('active');
+
+            switch (msgType) {
+                case 'text':
+                    textGroup.classList.add('active');
+                    break;
+                case 'markdown':
+                    markdownGroup.classList.add('active');
+                    break;
+                case 'image':
+                    imageGroup.classList.add('active');
+                    break;
+                case 'file':
+                    fileGroup.classList.add('active');
+                    break;
+            }
+        }
+
+        platformSelect.addEventListener('change', updateHints);
+
+        document.querySelectorAll('input[name="msgType"]').forEach(radio => {
+            radio.addEventListener('change', updateMessageTypeUI);
+        });
+
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const tabGroup = btn.closest('.tab-group');
+                tabGroup.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                const tab = btn.dataset.tab;
+                const parent = btn.closest('.form-group');
+
+                if (tab === 'url') {
+                    parent.querySelector('#imageUrlInput, #fileUrlInput')?.classList.add('active');
+                    parent.querySelector('#imageFileInput, #fileUploadInput')?.classList.remove('active');
+                } else {
+                    parent.querySelector('#imageUrlInput, #fileUrlInput')?.classList.remove('active');
+                    parent.querySelector('#imageFileInput, #fileUploadInput')?.classList.add('active');
+                }
+            });
+        });
+
+        document.getElementById('imageFile').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    fileData = ev.target.result;
+                    document.getElementById('preview').src = fileData;
+                    document.getElementById('preview').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            } else {
+                fileData = null;
+                document.getElementById('preview').style.display = 'none';
+            }
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    fileData = ev.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                fileData = null;
+            }
+        });
+
+        document.getElementById('sendForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Sending...';
+            resultDiv.className = 'result';
+            resultDiv.textContent = '';
+
+            const platform = platformSelect.value;
+            const msgType = document.querySelector('input[name="msgType"]:checked')?.value || 'text';
+
+            let body = { platform, msgtype: msgType, content: '', token: API_TOKEN };
+
+            try {
+                switch (msgType) {
+                    case 'text': {
+                        const content = document.getElementById('textContent').value.trim();
+                        if (!content) throw new Error('Please enter message content');
+                        body.content = content;
+                        break;
+                    }
+                    case 'markdown': {
+                        const content = document.getElementById('markdownContent').value.trim();
+                        if (!content) throw new Error('Please enter markdown content');
+                        body.content = content;
+                        break;
+                    }
+                    case 'image': {
+                        const activeTab = imageGroup.querySelector('.tab-btn.active').dataset.tab;
+                        if (activeTab === 'url') {
+                            const url = document.getElementById('imageUrl').value.trim();
+                            if (!url) throw new Error('Please enter image URL');
+                            body.content = url;
+                        } else {
+                            if (!fileData) throw new Error('Please select an image file');
+                            body.content = fileData.split(',')[1];
+                        }
+                        break;
+                    }
+                    case 'file': {
+                        const activeTab = fileGroup.querySelector('.tab-btn.active').dataset.tab;
+                        if (activeTab === 'url') {
+                            const url = document.getElementById('fileUrl').value.trim();
+                            if (!url) throw new Error('Please enter file URL');
+                            body.content = url;
+                        } else {
+                            if (!fileData) throw new Error('Please select a file');
+                            body.content = fileData.split(',')[1];
+                            body.filename = document.getElementById('fileInput').files[0]?.name || undefined;
+                        }
+                        break;
+                    }
+                }
+
+                const response = await fetch('/api/push/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showResult('success', 'Message sent successfully!');
+                    resetForm(msgType);
+                } else {
+                    showResult('error', 'Failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (err) {
+                showResult('error', 'Error: ' + err.message);
+            }
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Send';
+        });
+
+        function showResult(type, message) {
+            resultDiv.className = 'result ' + type;
+            resultDiv.textContent = message;
+        }
+
+        function resetForm(msgType) {
+            switch (msgType) {
+                case 'text':
+                    document.getElementById('textContent').value = '';
+                    break;
+                case 'markdown':
+                    document.getElementById('markdownContent').value = '';
+                    break;
+                case 'image':
+                    if (imageGroup.querySelector('.tab-btn.active').dataset.tab === 'url') {
+                        document.getElementById('imageUrl').value = '';
+                    } else {
+                        document.getElementById('imageFile').value = '';
+                        document.getElementById('preview').style.display = 'none';
+                        fileData = null;
+                    }
+                    break;
+                case 'file':
+                    if (fileGroup.querySelector('.tab-btn.active').dataset.tab === 'url') {
+                        document.getElementById('fileUrl').value = '';
+                    } else {
+                        document.getElementById('fileInput').value = '';
+                        fileData = null;
+                    }
+                    break;
+            }
+        }
+
+        updateHints();
+        updateMessageTypeUI();
+    </script>
+</body>
+
+</html>

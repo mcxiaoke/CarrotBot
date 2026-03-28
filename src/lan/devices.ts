@@ -458,7 +458,7 @@ export class TPLinkRouter {
             }
         }
 
-        logger.debug(`路由器获取到 ${hosts.length} 台设备在线`)
+        // logger.debug(`路由器获取到 ${hosts.length} 台设备在线`)
 
         return hosts
     }

@@ -421,33 +421,189 @@ DELETE /api/push/jobs/:id?token=xxx
 
 ## 推送发送
 
+### 概述
+
+推送API支持向企业微信和Telegram发送多种类型的消息。
+
+#### 支持的消息类型
+
+| 类型 | 企业微信 | Telegram | 说明 |
+|------|---------|----------|------|
+| text | ✓ | ✓ | 纯文本消息 |
+| markdown | ✓ | ✓ | Markdown格式消息 |
+| image | ✓ | ✓ | 图片消息 |
+| file | ✓ | ✓ | 文件消息（Telegram为document） |
+| news | ✓ | ✗ | 图文消息（仅企业微信） |
+
+#### 文件大小限制
+
+| 平台 | 图片 | 文件 |
+|------|------|------|
+| 企业微信 | 2MB（超过自动转文件，最大20MB） | 20MB |
+| Telegram | 10MB | 50MB |
+
 ### 发送到指定平台
 
 ```
 POST /api/push/send
 Content-Type: application/json
+```
 
+#### 文本消息
+
+```json
+{
+  "token": "xxx",
+  "platform": "wecom",
+  "msgtype": "text",
+  "content": "Hello, World!"
+}
+```
+
+企业微信支持@成员：
+
+```json
+{
+  "token": "xxx",
+  "platform": "wecom",
+  "msgtype": "text",
+  "content": "Hello @user",
+  "mentionedList": ["user1", "user2"],
+  "mentionedMobileList": ["13800138000"]
+}
+```
+
+#### Markdown消息
+
+```json
 {
   "token": "xxx",
   "platform": "telegram",
-  "content": "Hello, World!",
+  "msgtype": "markdown",
+  "content": "# 标题\n\n**加粗** *斜体*\n\n- 列表项1\n- 列表项2"
+}
+```
+
+> **注意**: Telegram Markdown消息会自动转义特殊字符，无需手动处理。
+
+企业微信Markdown支持颜色文本：
+
+```json
+{
+  "token": "xxx",
+  "platform": "wecom",
+  "msgtype": "markdown",
+  "content": "<font color=\"warning\">警告</font> <font color=\"info\">信息</font> <font color=\"comment\">注释</font>"
+}
+```
+
+#### 图片消息
+
+**方式一：URL**
+
+```json
+{
+  "token": "xxx",
+  "platform": "telegram",
+  "msgtype": "image",
+  "content": "https://example.com/image.jpg"
+}
+```
+
+> 企业微信图片URL会自动转为图文消息发送。
+
+**方式二：Base64编码**
+
+```json
+{
+  "token": "xxx",
+  "platform": "wecom",
+  "msgtype": "image",
+  "content": "iVBORw0KGgoAAAANSUhEUgAA..."
+}
+```
+
+> 企业微信图片超过2MB会自动转为文件发送。
+
+#### 文件消息
+
+**方式一：URL（仅Telegram）**
+
+```json
+{
+  "token": "xxx",
+  "platform": "telegram",
+  "msgtype": "file",
+  "content": "https://example.com/document.pdf",
+  "filename": "document.pdf"
+}
+```
+
+**方式二：Base64编码**
+
+```json
+{
+  "token": "xxx",
+  "platform": "wecom",
+  "msgtype": "file",
+  "content": "JVBERi0xLjQK...",
+  "filename": "document.pdf"
+}
+```
+
+> 企业微信文件会自动上传获取media_id后发送。
+
+#### 图文消息（仅企业微信）
+
+```json
+{
+  "token": "xxx",
+  "platform": "wecom",
+  "msgtype": "news",
+  "articles": [
+    {
+      "title": "文章标题",
+      "description": "文章描述",
+      "url": "https://example.com/article",
+      "picurl": "https://example.com/cover.jpg"
+    }
+  ]
+}
+```
+
+最多支持8篇文章。
+
+#### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| platform | string | 是 | 目标平台：`wecom` / `telegram` |
+| msgtype | string | 否 | 消息类型：`text` / `markdown` / `image` / `file` / `news`，默认 `text` |
+| content | string | 是* | 消息内容或Base64编码的文件 |
+| filename | string | 否 | 文件名（发送文件时使用） |
+| caption | string | 否 | 图片/文件说明（Telegram使用） |
+| articles | array | 是* | 图文消息文章列表（仅企业微信news类型） |
+| mentionedList | string[] | 否 | @用户ID列表（企业微信text使用） |
+| mentionedMobileList | string[] | 否 | @手机号列表（企业微信text使用） |
+
+> `*` content和articles根据消息类型二选一
+
+#### 响应
+
+成功：
+```json
+{
+  "success": true,
+  "platform": "wecom",
   "type": "text"
 }
 ```
 
-**参数：**
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| platform | string | 是 | 目标平台：`wecom` / `telegram` |
-| content | string | 是 | 消息内容 |
-| type | string | 否 | 内容类型：`text` / `markdown`，默认 `text` |
-
-**响应：**
+失败：
 ```json
 {
-  "success": true,
-  "platform": "telegram",
-  "type": "text"
+  "success": false,
+  "error": "错误描述"
 }
 ```
 
@@ -456,11 +612,15 @@ Content-Type: application/json
 ```
 POST /api/push/send/all
 Content-Type: application/json
+```
 
+请求参数同上，无需指定platform。
+
+```json
 {
   "token": "xxx",
-  "content": "广播消息",
-  "type": "text"
+  "msgtype": "text",
+  "content": "广播消息"
 }
 ```
 
@@ -497,6 +657,41 @@ GET /api/push/status?token=xxx
   }
 }
 ```
+
+### 上传文件到企业微信
+
+上传文件获取media_id，用于后续发送文件消息。
+
+```
+POST /api/push/wecom/upload
+Content-Type: application/json
+```
+
+```json
+{
+  "token": "xxx",
+  "filename": "document.pdf",
+  "content": "JVBERi0xLjQK...",
+  "type": "file"
+}
+```
+
+**参数：**
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| filename | string | 是 | 文件名 |
+| content | string | 是 | Base64编码的文件内容 |
+| type | string | 否 | 文件类型：`file` / `image` / `voice`，默认 `file` |
+
+**响应：**
+```json
+{
+  "success": true,
+  "mediaId": "3a8asd892asd8asd"
+}
+```
+
+> media_id 3天内有效
 
 ---
 

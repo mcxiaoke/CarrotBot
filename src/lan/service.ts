@@ -119,7 +119,7 @@ export class LanService {
         if (newHosts.length !== oldHosts.length || newOnline.length > 0 || newOffline.length > 0) {
             logger.info(`设备列表更新: ${newHosts.length} 台设备在线`)
         } else {
-            logger.debug(`设备列表未更新: ${newHosts.length} 台设备在线`)
+            // logger.debug(`设备列表未更新: ${newHosts.length} 台设备在线`)
         }
     }
 
@@ -135,7 +135,9 @@ export class LanService {
 
         try {
             const hosts = await this.router.getHosts()
-            this.showChangedHosts(this.hostsCache, hosts)
+            if (this.hostsCache.length > 0) {
+                this.showChangedHosts(this.hostsCache, hosts)
+            }
             this.hostsCache = hosts
             this.lastUpdate = Date.now()
         } catch (error) {
