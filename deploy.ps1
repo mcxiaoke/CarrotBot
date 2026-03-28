@@ -43,9 +43,13 @@ Write-Host "`n[4/4] 安装依赖并重启服务..." -ForegroundColor Yellow
 ssh $Server @"
     cd $RemotePath &&
     npm install --omit=dev &&
-    mkdir -p logs
+    mkdir -p logs &&
+    pm2 start carrotbot 2>&1 > logs/pm2.log
 "@
-
-Write-Host "`n=== 部署完成! ===" -ForegroundColor Green
-Write-Host "`n请使用node或pm2启动服务器"
+Start-Sleep -Seconds 2
+Write-Host "`n=== 部署完成，下面是PM2日志 ===" -ForegroundColor Green
+ssh $Server @"
+    cd $RemotePath &&
+    pm2 logs carrotbot --nostream
+"@
 Write-Host "服务器地址: http://192.168.1.118:3123" -ForegroundColor Cyan

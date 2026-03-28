@@ -76,25 +76,68 @@ export class LanService {
     }
 
     /**
+     * 显示设备变化信息
+     *
+     * 对比新旧设备列表，打印新上线和离线的设备信息。
+     *
+     * @param oldHosts - 旧设备列表
+     * @param newHosts - 新设备列表
+     */
+    private showChangedHosts(oldHosts: HostInfo[], newHosts: HostInfo[]): void {
+        const oldMacSet = new Set(oldHosts.map((h) => h.mac.toUpperCase()))
+        const newMacSet = new Set(newHosts.map((h) => h.mac.toUpperCase()))
+
+        const newOnline: HostInfo[] = []
+        const newOffline: HostInfo[] = []
+
+        for (const host of newHosts) {
+            if (!oldMacSet.has(host.mac.toUpperCase())) {
+                newOnline.push(host)
+            }
+        }
+
+        for (const host of oldHosts) {
+            if (!newMacSet.has(host.mac.toUpperCase())) {
+                newOffline.push(host)
+            }
+        }
+
+        if (newOnline.length > 0) {
+            for (const host of newOnline) {
+                logger.info(
+                    `新设备上线: ${host.hostnameDecoded} (${host.ip}, ${host.mac}, ${host.wifiType}-${host.phyType})`
+                )
+            }
+        }
+
+        if (newOffline.length > 0) {
+            for (const host of newOffline) {
+                logger.info(`设备离线: ${host.hostnameDecoded} (${host.ip}, ${host.mac})`)
+            }
+        }
+
+        if (newHosts.length !== oldHosts.length || newOnline.length > 0 || newOffline.length > 0) {
+            logger.info(`设备列表更新: ${newHosts.length} 台设备在线`)
+        } else {
+            logger.debug(`设备列表未更新: ${newHosts.length} 台设备在线`)
+        }
+    }
+
+    /**
      * 刷新设备列表
      *
      * 从路由器获取最新的在线设备列表并更新缓存。
      * 使用锁机制防止并发刷新。
      */
     async refreshHosts(): Promise<void> {
-        // 防止并发刷新
         if (this.isRefreshing) return
         this.isRefreshing = true
 
         try {
             const hosts = await this.router.getHosts()
+            this.showChangedHosts(this.hostsCache, hosts)
             this.hostsCache = hosts
             this.lastUpdate = Date.now()
-            if (hosts.length != this.hostsCache.length) {
-                logger.info(`设备列表更新: ${hosts.length} 台设备在线`)
-            } else {
-                logger.debug(`设备列表未更新: ${hosts.length} 台设备在线`)
-            }
         } catch (error) {
             const err = error as Error
             logger.error({ error: err.message }, '刷新设备列表失败')
