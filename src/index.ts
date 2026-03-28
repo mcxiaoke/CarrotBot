@@ -11,6 +11,7 @@
  * - 处理优雅关闭
  */
 
+import dotenv from 'dotenv'
 import { createServer } from './server.js'
 import { MessageRouter } from './core/router.js'
 import { WeComAdapter } from './adapters/wecom.js'
@@ -24,12 +25,19 @@ import { initMessageStore, closeMessageStore } from './storage/message-store.js'
 import { pushService } from './services/push.js'
 import { logger } from './logger.js'
 
+// 加载 .env 文件（如果存在）
+dotenv.config()
+
 // 从环境变量读取配置
 const PORT = parseInt(process.env.PORT || '3123', 10)
 const ROUTER_IP = process.env.ROUTER_IP || ''
 const ROUTER_PASSWORD = process.env.ROUTER_PASSWORD || ''
 const DATA_PATH = process.env.DATA_PATH || './data'
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info'
+
+// 平台启用标志
+const WECOM_ENABLED = process.env.WECOM_ENABLED !== 'false'
+const TELEGRAM_ENABLED = process.env.TELEGRAM_ENABLED !== 'false'
 
 // Telegram 代理配置
 const TELEGRAM_PROXY_TYPE = process.env.TELEGRAM_PROXY_TYPE as 'http' | 'socks' | undefined
@@ -42,6 +50,20 @@ const TELEGRAM_PROXY_PORT = parseInt(process.env.TELEGRAM_PROXY_PORT || '0', 10)
  * 执行应用程序的初始化和启动流程
  */
 async function main() {
+    // 0. 检查必要的环境变量
+    const wecomBotId = process.env.WECOM_BOT_ID || ''
+    const wecomBotSecret = process.env.WECOM_BOT_SECRET || ''
+    const telegramToken = process.env.TELEGRAM_BOT_TOKEN || ''
+
+    if (!wecomBotId && !wecomBotSecret && !telegramToken) {
+        logger.error('Missing required environment variables!')
+        logger.error('Please set at least one of:')
+        logger.error('  - WECOM_BOT_ID and WECOM_BOT_SECRET (企业微信)')
+        logger.error('  - TELEGRAM_BOT_TOKEN (Telegram)')
+        logger.error('Hint: Check if .env file exists and is properly configured')
+        process.exit(1)
+    }
+
     // 1. 初始化消息存储
     initMessageStore({
         dbPath: `${DATA_PATH}/messages.db`,
@@ -74,9 +96,7 @@ async function main() {
     const adapters: { name: string; adapter: WeComAdapter | TelegramAdapter }[] = []
 
     // 4.1 初始化企业微信适配器
-    const wecomBotId = process.env.WECOM_BOT_ID || ''
-    const wecomBotSecret = process.env.WECOM_BOT_SECRET || ''
-    if (wecomBotId && wecomBotSecret) {
+    if (WECOM_ENABLED && wecomBotId && wecomBotSecret) {
         const wecomAdapter = new WeComAdapter({
             botId: wecomBotId,
             botSecret: wecomBotSecret
@@ -90,13 +110,14 @@ async function main() {
         wecomAdapter.connect()
         adapters.push({ name: 'wecom', adapter: wecomAdapter })
         logger.info('WeCom adapter connected')
+    } else if (!WECOM_ENABLED) {
+        logger.info('WeCom adapter disabled by WECOM_ENABLED=false')
     } else {
         logger.warn('WeCom adapter disabled: WECOM_BOT_ID or WECOM_BOT_SECRET not set')
     }
 
     // 4.2 初始化 Telegram 适配器
-    const telegramToken = process.env.TELEGRAM_BOT_TOKEN || ''
-    if (telegramToken) {
+    if (TELEGRAM_ENABLED && telegramToken) {
         // 配置代理（如果提供）
         const proxyConfig =
             TELEGRAM_PROXY_TYPE && TELEGRAM_PROXY_HOST && TELEGRAM_PROXY_PORT
@@ -120,6 +141,8 @@ async function main() {
         telegramAdapter.connect()
         adapters.push({ name: 'telegram', adapter: telegramAdapter })
         logger.info('Telegram adapter connected')
+    } else if (!TELEGRAM_ENABLED) {
+        logger.info('Telegram adapter disabled by TELEGRAM_ENABLED=false')
     } else {
         logger.warn('Telegram adapter disabled: TELEGRAM_BOT_TOKEN not set')
     }

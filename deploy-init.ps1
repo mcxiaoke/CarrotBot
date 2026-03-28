@@ -40,7 +40,6 @@ Write-Host "`n[3/3] 安装依赖并启动服务..." -ForegroundColor Yellow
 ssh $Server @"
     cd $RemotePath &&
     npm install --omit=dev &&
-    npm rebuild better-sqlite3 &&
     mkdir -p logs &&
     pm2 start ecosystem.config.cjs &&
     pm2 save
