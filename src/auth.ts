@@ -1,14 +1,12 @@
 /**
  * API 认证模块
  *
- * 提供统一的 API Token 验证功能，用于保护所有 API 接口。
+ * 提供统一的 API Token 验证功能。
+ * 仅对 /api/ 路径下的接口进行认证保护，其他路径无需认证。
  */
 
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import { logger } from './logger.js'
-
-/** 不需要认证的路径列表 */
-const PUBLIC_PATHS = ['/', '/health', '/admin', '/favicon.ico']
 
 /**
  * 获取 API 认证令牌
@@ -37,13 +35,24 @@ export function validateToken(token: string): boolean {
 }
 
 /**
+ * 检查路径是否需要认证
+ *
+ * 只有 /api/ 开头的路径需要认证
+ *
+ * @param path - 请求路径
+ * @returns 是否需要认证
+ */
+function requiresAuth(path: string): boolean {
+    return path.startsWith('/api')
+}
+
+/**
  * Fastify 认证钩子
  *
- * 验证请求中的 token 参数（query 或 body）
+ * 仅对 /api/ 路径下的接口验证 token 参数（query 或 body）
  *
  * @param request - Fastify 请求对象
  * @param reply - Fastify 响应对象
- * @returns 是否通过认证
  */
 export async function authHook(
     request: FastifyRequest,
@@ -51,7 +60,7 @@ export async function authHook(
 ): Promise<void> {
     const path = request.routeOptions.url || request.url
 
-    if (PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + '/'))) {
+    if (!requiresAuth(path)) {
         return
     }
 

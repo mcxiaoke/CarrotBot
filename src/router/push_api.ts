@@ -3,6 +3,13 @@
  *
  * 本模块提供 HTTP API 接口，用于向企业微信和 Telegram 发送推送消息。
  * 支持单平台推送和全平台广播。
+ *
+ * 路由前缀: /api/push (在 server.ts 中注册)
+ *
+ * 接口列表:
+ * - POST /send         发送消息到指定平台
+ * - POST /send/all     广播消息到所有平台
+ * - GET  /status       获取推送平台配置状态
  */
 
 import type { FastifyInstance } from 'fastify'
@@ -32,13 +39,14 @@ type ContentType = 'text' | 'markdown'
 
 /**
  * 推送请求接口
+ *
+ * @property platform - 目标平台 (wecom/telegram)
+ * @property content - 消息内容
+ * @property type - 内容类型，默认 text
  */
 interface PushRequest {
-    /** 目标平台 */
     platform: Platform
-    /** 消息内容 */
     content: string
-    /** 内容类型，默认 text */
     type?: ContentType
 }
 
@@ -53,7 +61,6 @@ async function sendWecomWebhook(content: string, type: ContentType): Promise<voi
         throw new Error('WECOM_WEBHOOK_URL not configured')
     }
 
-    // 根据类型构建消息体
     const msgType = type === 'markdown' ? 'markdown' : 'text'
     const body =
         type === 'markdown'
@@ -64,7 +71,6 @@ async function sendWecomWebhook(content: string, type: ContentType): Promise<voi
 
     const response = await axios.post(WECOM_WEBHOOK_URL, body)
 
-    // 检查响应错误码
     if (response.data?.errcode !== 0) {
         throw new Error(`WeCom webhook error: ${response.data?.errmsg || 'Unknown error'}`)
     }
@@ -89,7 +95,6 @@ async function sendTelegramMessage(content: string, type: ContentType): Promise<
     const options: TelegramBot.ConstructorOptions = {}
     let proxyAgent: Agent | undefined
 
-    // 配置代理（如果提供）
     if (TELEGRAM_PROXY_TYPE && TELEGRAM_PROXY_HOST && TELEGRAM_PROXY_PORT) {
         const proxyUrl =
             TELEGRAM_PROXY_TYPE === 'socks'
@@ -116,7 +121,6 @@ async function sendTelegramMessage(content: string, type: ContentType): Promise<
 
     logger.debug({ type, chatId, contentLength: content.length }, 'Sending Telegram message')
 
-    // 根据类型发送消息
     if (type === 'markdown') {
         await bot.sendMessage(chatId, content, { parse_mode: 'MarkdownV2' })
     } else {
@@ -129,6 +133,11 @@ async function sendTelegramMessage(content: string, type: ContentType): Promise<
 /**
  * 注册推送 API 路由
  *
+ * 在 /api/push 前缀下注册以下接口:
+ * - POST /send         发送消息到指定平台
+ * - POST /send/all     广播消息到所有平台
+ * - GET  /status       获取推送平台配置状态
+ *
  * @param fastify - Fastify 实例
  */
 export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<void> {
@@ -136,7 +145,16 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
      * 发送消息到指定平台
      *
      * POST /api/push/send
-     * 请求体: { platform, content, type }
+     *
+     * 请求体:
+     * - platform: 目标平台 (wecom/telegram)
+     * - content: 消息内容
+     * - type: 内容类型 (text/markdown)，默认 text
+     *
+     * 响应:
+     * - success: 是否发送成功
+     * - platform: 目标平台
+     * - type: 内容类型
      */
     fastify.post<{ Body: PushRequest }>('/send', async (request, reply) => {
         const { platform, content, type = 'text' } = request.body
@@ -187,7 +205,14 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
      * 广播消息到所有平台
      *
      * POST /api/push/send/all
-     * 请求体: { content, type }
+     *
+     * 请求体:
+     * - content: 消息内容
+     * - type: 内容类型 (text/markdown)，默认 text
+     *
+     * 响应:
+     * - success: 是否全部发送成功
+     * - results: 各平台发送结果数组
      */
     fastify.post<{ Body: PushRequest }>('/send/all', async (request, reply) => {
         const { content, type = 'text' } = request.body
@@ -242,6 +267,12 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
      * 获取推送平台状态
      *
      * GET /api/push/status
+     *
+     * 响应:
+     * - success: 请求是否成功
+     * - platforms: 各平台配置状态
+     *   - wecom: { available: boolean, type: 'webhook' }
+     *   - telegram: { available: boolean, type: 'bot' }
      */
     fastify.get('/status', async () => {
         logger.debug('Push API status requested')
