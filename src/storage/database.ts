@@ -66,6 +66,45 @@ export interface MessageQuery {
     startDate?: string
     /** 结束日期 */
     endDate?: string
+    /**
+     * 查询最近时间段的消息
+     * 格式: 数字+单位，如 "5m"(5分钟)、"30m"(30分钟)、"3d"(3天)、"2h"(2小时)
+     * 单位: m-分钟, h-小时, d-天
+     */
+    last?: string
+}
+
+/**
+ * 解析 last 参数并返回对应的 startDate
+ *
+ * @param last - 时间段字符串，如 "5m"、"30m"、"3d"
+ * @returns ISO 格式的开始日期字符串
+ */
+function parseLastParam(last: string): string {
+    const match = last.match(/^(\d+)([mhd])$/)
+    if (!match) {
+        throw new Error(
+            `Invalid last parameter format: ${last}. Expected format: <number><unit> (e.g., 5m, 30m, 3d)`
+        )
+    }
+
+    const value = parseInt(match[1], 10)
+    const unit = match[2]
+    const now = new Date()
+
+    switch (unit) {
+        case 'm':
+            now.setMinutes(now.getMinutes() - value)
+            break
+        case 'h':
+            now.setHours(now.getHours() - value)
+            break
+        case 'd':
+            now.setDate(now.getDate() - value)
+            break
+    }
+
+    return now.toISOString()
 }
 
 /** 数据库实例 */
@@ -211,7 +250,11 @@ export function queryMessages(query: MessageQuery): MessageRecord[] {
         conditions.push('content LIKE @keyword')
         params.keyword = `%${query.keyword}%`
     }
-    if (query.startDate) {
+    if (query.last) {
+        const startDate = parseLastParam(query.last)
+        conditions.push('created_at >= @startDate')
+        params.startDate = startDate
+    } else if (query.startDate) {
         conditions.push('created_at >= @startDate')
         params.startDate = query.startDate
     }
@@ -296,7 +339,11 @@ export function countMessages(query: MessageQuery): number {
         conditions.push('content LIKE @keyword')
         params.keyword = `%${query.keyword}%`
     }
-    if (query.startDate) {
+    if (query.last) {
+        const startDate = parseLastParam(query.last)
+        conditions.push('created_at >= @startDate')
+        params.startDate = startDate
+    } else if (query.startDate) {
         conditions.push('created_at >= @startDate')
         params.startDate = query.startDate
     }

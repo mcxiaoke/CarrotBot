@@ -118,6 +118,20 @@ export async function createServer(): Promise<FastifyInstance> {
             /**
              * 查询消息列表
              * GET /msg/messages
+             *
+             * 查询参数:
+             * - platform: 按平台筛选
+             * - chatid: 按会话 ID 筛选
+             * - userid: 按用户 ID 筛选
+             * - direction: 按消息方向筛选 (in/out)
+             * - msgtype: 按消息类型筛选
+             * - keyword: 按关键词搜索
+             * - last: 查询最近时间段的消息，格式: 数字+单位
+             *         例如: "5m"(5分钟)、"30m"(30分钟)、"2h"(2小时)、"3d"(3天)
+             * - startDate: 开始日期 (与 last 互斥，last 优先)
+             * - endDate: 结束日期
+             * - limit: 返回数量限制，默认 50
+             * - offset: 偏移量，用于分页
              */
             instance.get('/messages', async (request) => {
                 const query = request.query as MessageQuery
