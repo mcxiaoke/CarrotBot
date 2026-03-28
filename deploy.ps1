@@ -43,9 +43,9 @@ Write-Host "`n[4/4] 安装依赖并重启服务..." -ForegroundColor Yellow
 ssh $Server @"
     cd $RemotePath &&
     npm install --omit=dev &&
-    mkdir -p logs &&
-    pm2 restart ecosystem.config.cjs 2>/dev/null || pm2 start ecosystem.config.cjs
+    mkdir -p logs
 "@
 
 Write-Host "`n=== 部署完成! ===" -ForegroundColor Green
+Write-Host "`n请使用node或pm2启动服务器"
 Write-Host "服务器地址: http://192.168.1.118:3123" -ForegroundColor Cyan

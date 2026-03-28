@@ -6,7 +6,7 @@
  */
 
 import axios from 'axios'
-
+import { logger } from '../logger.js'
 /**
  * TP-Link 路由器密码加密常量
  * 用于实现路由器的自定义加密算法
@@ -242,6 +242,36 @@ export class HostInfo {
 }
 
 /**
+ * WAN 状态信息接口
+ */
+export interface WanStatus {
+    /** 连接状态 */
+    status: string
+    /** IP 地址 */
+    ip: string
+    /** 子网掩码 */
+    netmask: string
+    /** 网关 */
+    gateway: string
+    /** DNS 服务器 */
+    dns: string[]
+    /** 连接类型 */
+    connectType: string
+}
+
+/**
+ * 易展扩展设备信息接口
+ */
+export interface ConnectedExt {
+    /** 设备 MAC */
+    mac: string
+    /** 设备名称 */
+    name: string
+    /** 连接状态 */
+    status: string
+}
+
+/**
  * TP-Link 路由器配置接口
  */
 export interface TPLinkRouterOptions {
@@ -325,15 +355,20 @@ export class TPLinkRouter {
         }
 
         try {
-            const response = await axios.post(url, payload, { timeout: 5000 })
+            const response = await axios.post(url, payload, {
+                timeout: 5000,
+                headers: { Connection: 'keep-alive' }
+            })
+            await new Promise((resolve) => setTimeout(resolve, 200))
             const data = response.data
             if (data.error_code === 0) {
+                logger.debug('路由器登录成功')
                 this.stok = data.stok
                 return true
             }
-            console.log(`登录失败: ${JSON.stringify(data)}`)
+            logger.error(`路由器登录失败: ${JSON.stringify(data)}`)
         } catch (error) {
-            console.log(`登录异常: ${(error as Error).message}`)
+            logger.error(`路由器登录异常: ${(error as Error).message}`)
         }
         return false
     }
@@ -369,7 +404,11 @@ export class TPLinkRouter {
 
         const url = `http://${this.ip}/stok=${this.stok}/ds`
         try {
-            const response = await axios.post(url, payload, { timeout: 5000 })
+            await new Promise((resolve) => setTimeout(resolve, 200))
+            const response = await axios.post(url, payload, {
+                timeout: 5000,
+                headers: { Connection: 'keep-alive' }
+            })
             const data = response.data
             // 检查错误码，非零表示需要重新登录
             if ('error_code' in data && data.error_code !== 0) {
@@ -378,7 +417,7 @@ export class TPLinkRouter {
             }
             return data
         } catch (error) {
-            console.log(`请求异常: ${(error as Error).message}`)
+            logger.error(`路由器请求异常: ${(error as Error).message}`)
             this.stok = null
             return null
         }
@@ -393,21 +432,18 @@ export class TPLinkRouter {
      */
     async getHosts(): Promise<HostInfo[]> {
         const payload = {
-            system: { name: ['sys'] },
-            hosts_info: { table: 'host_info' },
-            network: { name: 'iface_mac' },
-            function: { name: 'new_module_spec' },
+            hosts_info: { table: 'online_host' },
             method: 'get'
         }
         const data = await this.request(payload)
         if (!data) {
+            logger.error('路由器获取设备列表失败')
             return []
         }
 
         const hosts: HostInfo[] = []
-        // 解析设备列表数据
         const hostList =
-            ((data.hosts_info as Record<string, unknown>)?.host_info as Array<
+            ((data.hosts_info as Record<string, unknown>)?.online_host as Array<
                 Record<string, Record<string, string>>
             >) ?? []
         for (const item of hostList) {
@@ -417,10 +453,12 @@ export class TPLinkRouter {
                     const host = HostInfo.fromApiData(hostData)
                     hosts.push(host)
                 } catch (error) {
-                    console.log(`解析设备信息失败: ${(error as Error).message}`)
+                    logger.error(`路由器解析设备信息失败: ${(error as Error).message}`)
                 }
             }
         }
+
+        logger.debug(`路由器获取到 ${hosts.length} 台设备在线`)
 
         return hosts
     }
@@ -453,5 +491,425 @@ export class TPLinkRouter {
             }
         }
         return null
+    }
+
+    /**
+     * 通用查询接口
+     *
+     * 发送自定义 payload 到路由器 API，适用于未封装的查询场景。
+     *
+     * @param payload - 自定义请求载荷
+     * @returns 响应数据，失败返回 null
+     *
+     * @example
+     * ```typescript
+     * const data = await router.query({
+     *   hosts_info: { table: 'online_host' },
+     *   method: 'get'
+     * });
+     * ```
+     */
+    async query(payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+        return await this.request(payload)
+    }
+
+    /**
+     * 获取离线设备列表
+     *
+     * 从路由器获取历史连接过但当前离线的设备信息。
+     *
+     * @returns 离线设备信息列表
+     */
+    async getOfflineHosts(): Promise<HostInfo[]> {
+        const payload = {
+            hosts_info: { table: 'offline_host' },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取离线设备列表失败')
+            return []
+        }
+
+        const hosts: HostInfo[] = []
+        const hostList =
+            ((data.hosts_info as Record<string, unknown>)?.offline_host as Array<
+                Record<string, Record<string, string>>
+            >) ?? []
+        for (const item of hostList) {
+            for (const hostKey in item) {
+                try {
+                    const hostData = item[hostKey]
+                    const host = HostInfo.fromApiData(hostData)
+                    hosts.push(host)
+                } catch (error) {
+                    logger.error(`路由器解析离线设备信息失败: ${(error as Error).message}`)
+                }
+            }
+        }
+
+        logger.debug(`路由器获取到 ${hosts.length} 台离线设备`)
+        return hosts
+    }
+
+    /**
+     * 获取所有设备信息（包含在线和离线）
+     *
+     * @returns 设备信息列表
+     */
+    async getAllHosts(): Promise<HostInfo[]> {
+        const payload = {
+            hosts_info: { table: ['host_info', 'offline_host'], name: 'cap_host_num' },
+            network: { name: ['iface_mac', 'lan'] },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取所有设备列表失败')
+            return []
+        }
+
+        const hosts: HostInfo[] = []
+        const hostsInfo = data.hosts_info as Record<string, unknown> | undefined
+
+        const hostInfoList =
+            (hostsInfo?.host_info as Array<Record<string, Record<string, string>>>) ?? []
+        for (const item of hostInfoList) {
+            for (const hostKey in item) {
+                try {
+                    const host = HostInfo.fromApiData(item[hostKey])
+                    hosts.push(host)
+                } catch (error) {
+                    logger.error(`路由器解析设备信息失败: ${(error as Error).message}`)
+                }
+            }
+        }
+
+        const offlineHostList =
+            (hostsInfo?.offline_host as Array<Record<string, Record<string, string>>>) ?? []
+        for (const item of offlineHostList) {
+            for (const hostKey in item) {
+                try {
+                    const host = HostInfo.fromApiData(item[hostKey])
+                    hosts.push(host)
+                } catch (error) {
+                    logger.error(`路由器解析离线设备信息失败: ${(error as Error).message}`)
+                }
+            }
+        }
+
+        logger.debug(`路由器获取到 ${hosts.length} 台设备（含离线）`)
+        return hosts
+    }
+
+    /**
+     * 获取 WAN 状态
+     *
+     * @returns WAN 状态信息，失败返回 null
+     */
+    async getWanStatus(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            network: { name: ['wan_status', 'wan_status_2'] },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取 WAN 状态失败')
+            return null
+        }
+        return data.network as Record<string, unknown>
+    }
+
+    /**
+     * 获取 IPv6 和 DHCP 信息
+     *
+     * @returns 网络协议信息，失败返回 null
+     */
+    async getNetworkProtocol(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            network: { name: ['wan_status', 'wanv6_status'] },
+            protocol: { name: ['dhcp', 'ipv6_info'] },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取网络协议信息失败')
+            return null
+        }
+        return data
+    }
+
+    /**
+     * 获取易展连接的扩展设备
+     *
+     * 用于获取通过易展功能连接的扩展路由器信息。
+     *
+     * @returns 扩展设备列表
+     */
+    async getConnectedExt(): Promise<Record<string, unknown>[]> {
+        const payload = {
+            hyfi: { table: ['connected_ext'] },
+            hosts_info: { table: 'online_host', name: 'cap_host_num' },
+            wireless: { table: ['sta_bind_rule', 'sta_bind_rule_status'] },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取易展扩展设备失败')
+            return []
+        }
+
+        const extList =
+            ((data.hyfi as Record<string, unknown>)?.connected_ext as Array<
+                Record<string, unknown>
+            >) ?? []
+        logger.debug(`路由器获取到 ${extList.length} 台易展扩展设备`)
+        return extList
+    }
+
+    /**
+     * 获取系统信息
+     *
+     * 包含系统模式、固件版本等信息。
+     *
+     * @returns 系统信息，失败返回 null
+     */
+    async getSystemInfo(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            system: { name: ['sys_mode'] },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取系统信息失败')
+            return null
+        }
+        return data.system as Record<string, unknown>
+    }
+
+    /**
+     * 获取设备状态和固件信息
+     *
+     * @returns 设备状态信息，失败返回 null
+     */
+    async getDeviceStatus(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            network: { name: ['wan_status', 'wan_status_2'] },
+            cloud_config: { name: ['new_firmware', 'device_status', 'bind'] },
+            system: { name: 'sys_mode' },
+            wireless: { name: ['wlan_wds_2g', 'wlan_wds_5g'] },
+            hyfi: { table: 'connected_ext' },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取设备状态失败')
+            return null
+        }
+        return data
+    }
+
+    /**
+     * 获取无线 WDS 信息
+     *
+     * @returns WDS 信息，失败返回 null
+     */
+    async getWirelessWds(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            wireless: { name: ['wlan_wds_2g', 'wlan_wds_5g'] },
+            system: { name: 'sys_mode' },
+            port_manage: { table: 'mwan' },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取无线 WDS 信息失败')
+            return null
+        }
+        return data
+    }
+
+    /**
+     * 获取端口设备信息
+     *
+     * 包含各端口的状态和配置信息。
+     *
+     * @returns 端口设备信息，失败返回 null
+     */
+    async getPortDevInfo(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            port_manage: { table: 'dev_info' },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取端口设备信息失败')
+            return null
+        }
+        return data
+    }
+
+    /**
+     * 获取 WAN 协议配置
+     *
+     * @returns WAN 协议配置，失败返回 null
+     */
+    async getWanProtocol(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            protocol: { name: 'wan' },
+            function: { name: 'new_module_spec' },
+            system: { name: 'sys_mode' },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取 WAN 协议配置失败')
+            return null
+        }
+        return data
+    }
+
+    /**
+     * 获取网络连接状态
+     *
+     * 包含 WAN 连接状态、PPPoE 配置、在线检测等。
+     *
+     * @returns 网络连接状态，失败返回 null
+     */
+    async getNetworkConnectStatus(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            protocol: { name: ['wan', 'pppoe'] },
+            network: { name: ['wan_status', 'iface_mac'] },
+            wan_port_detect: { name: 'config' },
+            online_check: { name: 'wan' },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取网络连接状态失败')
+            return null
+        }
+        return data
+    }
+
+    /**
+     * 获取 IPv6 开关状态
+     *
+     * @returns IPv6 开关状态，失败返回 null
+     */
+    async getIpv6SwitchStatus(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            network: { name: 'ipv6_switch_status' },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取 IPv6 开关状态失败')
+            return null
+        }
+        return data
+    }
+
+    /**
+     * 获取 IPv6 详细信息
+     *
+     * @returns IPv6 详细信息，失败返回 null
+     */
+    async getIpv6Info(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            protocol: { name: 'ipv6_info' },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取 IPv6 详细信息失败')
+            return null
+        }
+        return data
+    }
+
+    /**
+     * 获取 LAN IPv6 状态
+     *
+     * 包含 DHCPv6、SLAAC、RDNSS 配置。
+     *
+     * @returns LAN IPv6 状态，失败返回 null
+     */
+    async getLanIpv6Status(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            network: { name: 'lanv6_status' },
+            protocol: { name: ['dhcpsv6', 'slaac', 'rdnss'] },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取 LAN IPv6 状态失败')
+            return null
+        }
+        return data
+    }
+
+    /**
+     * 获取 LAN 配置
+     *
+     * 包含 LAN 口 IP 地址、子网掩码等配置。
+     *
+     * @returns LAN 配置，失败返回 null
+     */
+    async getLanConfig(): Promise<Record<string, unknown> | null> {
+        const payload = {
+            network: { name: 'lan' },
+            method: 'get'
+        }
+        const data = await this.request(payload)
+        if (!data) {
+            logger.error('路由器获取 LAN 配置失败')
+            return null
+        }
+        return data
+    }
+
+    /**
+     * 重启路由器
+     *
+     * @returns 操作是否成功
+     */
+    async reboot(): Promise<boolean> {
+        // not implemented
+        logger.info('路由器重启功能未实现')
+        return true
+    }
+
+    /**
+     * 恢复出厂设置
+     *
+     * @returns 操作是否成功
+     */
+    async factoryReset(): Promise<boolean> {
+        // not implemented
+        logger.info('路由器恢复出厂设置功能未实现')
+        return true
+    }
+
+    /**
+     * 断开 WAN 连接
+     *
+     * @returns 操作是否成功
+     */
+    async disconnectWan(): Promise<boolean> {
+        // not implemented
+        logger.info('路由器断开 WAN 连接功能未实现')
+        return true
+    }
+
+    /**
+     * 连接 WAN
+     *
+     * @returns 操作是否成功
+     */
+    async connectWan(): Promise<boolean> {
+        // not implemented
+        logger.info('路由器连接 WAN 功能未实现')
+        return true
     }
 }

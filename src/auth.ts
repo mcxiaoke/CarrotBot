@@ -7,11 +7,19 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import { logger } from './logger.js'
 
-/** API 认证令牌 */
-const API_TOKEN = process.env.API_TOKEN || ''
-
 /** 不需要认证的路径列表 */
 const PUBLIC_PATHS = ['/', '/health']
+
+/**
+ * 获取 API 认证令牌
+ *
+ * 延迟读取环境变量，确保 dotenv.config() 已执行
+ *
+ * @returns API 令牌
+ */
+function getApiToken(): string {
+    return process.env.API_TOKEN || ''
+}
 
 /**
  * 验证 API 令牌
@@ -20,6 +28,7 @@ const PUBLIC_PATHS = ['/', '/health']
  * @returns 是否有效
  */
 export function validateToken(token: string): boolean {
+    const API_TOKEN = getApiToken()
     if (!API_TOKEN) {
         logger.warn('API_TOKEN not configured')
         return false
