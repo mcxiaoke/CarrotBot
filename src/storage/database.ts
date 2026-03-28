@@ -8,7 +8,13 @@
 import Database from 'better-sqlite3'
 import { mkdirSync } from 'fs'
 import { dirname } from 'path'
+import dayjs from 'dayjs'
+import utc from 'dayjs/plugin/utc.js'
+import timezone from 'dayjs/plugin/timezone.js'
 import { logger } from '../logger.js'
+
+dayjs.extend(utc)
+dayjs.extend(timezone)
 
 /**
  * 消息记录接口
@@ -83,7 +89,7 @@ export interface MessageQuery {
  * 解析 last 参数并返回对应的 startDate
  *
  * @param last - 时间段字符串，如 "5m"、"30m"、"3d"
- * @returns ISO 格式的开始日期字符串
+ * @returns ISO 格式的开始日期字符串 (UTC)
  */
 function parseLastParam(last: string): string {
     const match = last.match(/^(\d+)([mhd])$/)
@@ -95,21 +101,21 @@ function parseLastParam(last: string): string {
 
     const value = parseInt(match[1], 10)
     const unit = match[2]
-    const now = new Date()
+    let date = dayjs()
 
     switch (unit) {
         case 'm':
-            now.setMinutes(now.getMinutes() - value)
+            date = date.subtract(value, 'minute')
             break
         case 'h':
-            now.setHours(now.getHours() - value)
+            date = date.subtract(value, 'hour')
             break
         case 'd':
-            now.setDate(now.getDate() - value)
+            date = date.subtract(value, 'day')
             break
     }
 
-    return now.toISOString()
+    return date.utc().format('YYYY-MM-DD HH:mm:ss')
 }
 
 /** 数据库实例 */
@@ -257,14 +263,14 @@ export function queryMessages(query: MessageQuery): MessageRecord[] {
     }
     if (query.last) {
         const startDate = parseLastParam(query.last)
-        conditions.push('created_at >= @startDate')
+        conditions.push('datetime(created_at) >= datetime(@startDate)')
         params.startDate = startDate
     } else if (query.startDate) {
-        conditions.push('created_at >= @startDate')
+        conditions.push('datetime(created_at) >= datetime(@startDate)')
         params.startDate = query.startDate
     }
     if (query.endDate) {
-        conditions.push('created_at <= @endDate')
+        conditions.push('datetime(created_at) <= datetime(@endDate)')
         params.endDate = query.endDate
     }
     if (query.isAction) {
@@ -285,7 +291,21 @@ export function queryMessages(query: MessageQuery): MessageRecord[] {
   `
 
     const stmt = database.prepare(sql)
-    return stmt.all({ ...params, limit, offset }) as MessageRecord[]
+    const records = stmt.all({ ...params, limit, offset }) as MessageRecord[]
+    return records.map(convertToLocalTime)
+}
+
+/**
+ * 将 UTC 时间转换为本地时间
+ *
+ * @param record - 消息记录
+ * @returns 转换后的消息记录
+ */
+function convertToLocalTime(record: MessageRecord): MessageRecord {
+    if (record.created_at) {
+        record.created_at = dayjs.utc(record.created_at).local().format('YYYY-MM-DD HH:mm:ss Z')
+    }
+    return record
 }
 
 /**
@@ -297,7 +317,8 @@ export function queryMessages(query: MessageQuery): MessageRecord[] {
 export function getMessageById(id: number): MessageRecord | undefined {
     const database = getDatabase()
     const stmt = database.prepare('SELECT * FROM messages WHERE id = ?')
-    return stmt.get(id) as MessageRecord | undefined
+    const record = stmt.get(id) as MessageRecord | undefined
+    return record ? convertToLocalTime(record) : undefined
 }
 
 /**
@@ -309,7 +330,8 @@ export function getMessageById(id: number): MessageRecord | undefined {
 export function getMessageByMsgid(msgid: string): MessageRecord | undefined {
     const database = getDatabase()
     const stmt = database.prepare('SELECT * FROM messages WHERE msgid = ?')
-    return stmt.get(msgid) as MessageRecord | undefined
+    const record = stmt.get(msgid) as MessageRecord | undefined
+    return record ? convertToLocalTime(record) : undefined
 }
 
 /**
@@ -350,14 +372,14 @@ export function countMessages(query: MessageQuery): number {
     }
     if (query.last) {
         const startDate = parseLastParam(query.last)
-        conditions.push('created_at >= @startDate')
+        conditions.push('datetime(created_at) >= datetime(@startDate)')
         params.startDate = startDate
     } else if (query.startDate) {
-        conditions.push('created_at >= @startDate')
+        conditions.push('datetime(created_at) >= datetime(@startDate)')
         params.startDate = query.startDate
     }
     if (query.endDate) {
-        conditions.push('created_at <= @endDate')
+        conditions.push('datetime(created_at) <= datetime(@endDate)')
         params.endDate = query.endDate
     }
     if (query.isAction) {
@@ -382,7 +404,7 @@ export function countMessages(query: MessageQuery): number {
  */
 export function deleteMessagesBefore(date: string): number {
     const database = getDatabase()
-    const stmt = database.prepare('DELETE FROM messages WHERE created_at < ?')
+    const stmt = database.prepare('DELETE FROM messages WHERE datetime(created_at) < datetime(?)')
     const result = stmt.run(date)
     return result.changes
 }

@@ -112,7 +112,13 @@ export class MessageRouter {
                 )
             }
         } else {
-            logger.warn({ msg }, 'No action matched and no default action set')
+            const msgInfo = {
+                platform: msg.platform,
+                msgType: msg.msgType,
+                content: msg.content,
+                from: msg.from
+            }
+            logger.warn(msgInfo, 'No action matched and no default action set')
         }
     }
 

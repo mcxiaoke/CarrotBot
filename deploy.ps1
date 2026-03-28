@@ -44,7 +44,7 @@ ssh $Server @"
     cd $RemotePath &&
     npm install --omit=dev &&
     mkdir -p logs &&
-    pm2 start carrotbot 2>&1 > logs/pm2.log
+    pm2 restart carrotbot 2>&1 > logs/pm2.log
 "@
 Start-Sleep -Seconds 2
 Write-Host "`n=== 部署完成，下面是PM2日志 ===" -ForegroundColor Green

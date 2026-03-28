@@ -8,7 +8,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify'
 import { logger } from './logger.js'
 
 /** 不需要认证的路径列表 */
-const PUBLIC_PATHS = ['/', '/health']
+const PUBLIC_PATHS = ['/', '/health', '/admin', '/favicon.ico']
 
 /**
  * 获取 API 认证令牌

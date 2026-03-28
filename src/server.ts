@@ -25,6 +25,7 @@ import {
 } from './storage/cache.js'
 import { pushService, type PushJob } from './services/push.js'
 import { registerPushApiRoutes } from './router/push_api.js'
+import { registerAdminRoutes } from './router/admin.js'
 
 /**
  * 创建 HTTP 服务器
@@ -55,6 +56,11 @@ export async function createServer(): Promise<FastifyInstance> {
     fastify.get('/', async () => {
         return { name: 'CarrotBot', version: '1.0.0' }
     })
+
+    /**
+     * 管理页面路由
+     */
+    fastify.register(registerAdminRoutes)
 
     /**
      * LAN 设备管理接口
