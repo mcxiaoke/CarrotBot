@@ -165,8 +165,9 @@ export async function saveIncomingMessage(
                 )
             }
         } catch (error) {
+            const err = error as Error
             logger.error(
-                { error, msgid, platform: msg.platform, msgType: msg.msgType },
+                { error: err.message, msgid, platform: msg.platform, msgType: msg.msgType },
                 'Failed to download media for incoming message'
             )
         }

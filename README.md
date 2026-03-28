@@ -125,7 +125,7 @@ DATA_PATH=./data
 LOG_LEVEL=info
 
 # 推送 API 配置 (可选)
-PUSH_API_TOKEN=your-api-token
+API_TOKEN=your-api-token
 WECOM_WEBHOOK_URL=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx
 TELEGRAM_USER_ID=your-user-id
 ```

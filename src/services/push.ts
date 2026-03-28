@@ -216,7 +216,8 @@ class PushServiceImpl {
             logger.info({ jobId: id }, 'Push job executed')
             return true
         } catch (err) {
-            logger.error({ err, jobId: id }, 'Push job failed')
+            const error = err as Error
+            logger.error({ err: error.message, jobId: id }, 'Push job failed')
             return false
         }
     }
@@ -263,7 +264,8 @@ class PushServiceImpl {
                 job.nextRun = new Date(Date.now() + interval).toISOString()
                 logger.info({ jobId: job.id }, 'Push job executed')
             } catch (err) {
-                logger.error({ err, jobId: job.id }, 'Push job failed')
+                const error = err as Error
+                logger.error({ err: error.message, jobId: job.id }, 'Push job failed')
             }
         }, interval)
 

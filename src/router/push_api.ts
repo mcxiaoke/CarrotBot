@@ -13,8 +13,6 @@ import { HttpsProxyAgent } from 'https-proxy-agent'
 import { SocksProxyAgent } from 'socks-proxy-agent'
 import { logger } from '../logger.js'
 
-/** API 认证令牌 */
-const PUSH_API_TOKEN = process.env.PUSH_API_TOKEN || ''
 /** 企业微信 Webhook URL */
 const WECOM_WEBHOOK_URL = process.env.WECOM_WEBHOOK_URL || ''
 /** Telegram Bot Token */
@@ -36,28 +34,12 @@ type ContentType = 'text' | 'markdown'
  * 推送请求接口
  */
 interface PushRequest {
-    /** API 认证令牌 */
-    token: string
     /** 目标平台 */
     platform: Platform
     /** 消息内容 */
     content: string
     /** 内容类型，默认 text */
     type?: ContentType
-}
-
-/**
- * 验证 API 令牌
- *
- * @param token - 待验证的令牌
- * @returns 是否有效
- */
-function validateToken(token: string): boolean {
-    if (!PUSH_API_TOKEN) {
-        logger.warn('PUSH_API_TOKEN not configured')
-        return false
-    }
-    return token === PUSH_API_TOKEN
 }
 
 /**
@@ -154,26 +136,18 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
      * 发送消息到指定平台
      *
      * POST /api/push/send
-     * 请求体: { token, platform, content, type }
+     * 请求体: { platform, content, type }
      */
     fastify.post<{ Body: PushRequest }>('/send', async (request, reply) => {
-        const { token, platform, content, type = 'text' } = request.body
+        const { platform, content, type = 'text' } = request.body
 
         logger.info({ ip: request.ip, platform, type }, 'Push API request received')
 
-        // 验证令牌
-        if (!validateToken(token)) {
-            logger.warn({ ip: request.ip }, 'Invalid push API token')
-            return reply.code(401).send({ success: false, error: 'Invalid token' })
-        }
-
-        // 验证内容
         if (!content || content.trim().length === 0) {
             logger.warn({ ip: request.ip }, 'Content is empty')
             return reply.code(400).send({ success: false, error: 'Content is required' })
         }
 
-        // 验证平台
         if (!['wecom', 'telegram'].includes(platform)) {
             logger.warn({ ip: request.ip, platform }, 'Invalid platform')
             return reply
@@ -181,7 +155,6 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
                 .send({ success: false, error: 'Invalid platform. Use "wecom" or "telegram"' })
         }
 
-        // 验证内容类型
         if (!['text', 'markdown'].includes(type)) {
             logger.warn({ ip: request.ip, type }, 'Invalid content type')
             return reply
@@ -192,7 +165,6 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
         try {
             logger.debug({ platform, type, contentLength: content.length }, 'Sending push message')
 
-            // 根据平台发送消息
             if (platform === 'wecom') {
                 await sendWecomWebhook(content, type)
             } else if (platform === 'telegram') {
@@ -206,7 +178,7 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
             return { success: true, platform, type }
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-            logger.error({ err, platform, type }, 'Push API send failed')
+            logger.error({ err: errorMessage, platform, type }, 'Push API send failed')
             return reply.code(500).send({ success: false, error: errorMessage })
         }
     })
@@ -215,20 +187,13 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
      * 广播消息到所有平台
      *
      * POST /api/push/send/all
-     * 请求体: { token, content, type }
+     * 请求体: { content, type }
      */
     fastify.post<{ Body: PushRequest }>('/send/all', async (request, reply) => {
-        const { token, content, type = 'text' } = request.body
+        const { content, type = 'text' } = request.body
 
         logger.info({ ip: request.ip, type }, 'Push API broadcast request received')
 
-        // 验证令牌
-        if (!validateToken(token)) {
-            logger.warn({ ip: request.ip }, 'Invalid push API token')
-            return reply.code(401).send({ success: false, error: 'Invalid token' })
-        }
-
-        // 验证内容
         if (!content || content.trim().length === 0) {
             logger.warn({ ip: request.ip }, 'Content is empty')
             return reply.code(400).send({ success: false, error: 'Content is required' })
@@ -236,7 +201,6 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
 
         const results: { platform: string; success: boolean; error?: string }[] = []
 
-        // 发送到企业微信
         if (WECOM_WEBHOOK_URL) {
             try {
                 logger.debug({ type, contentLength: content.length }, 'Sending to WeCom')
@@ -244,12 +208,11 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
                 results.push({ platform: 'wecom', success: true })
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-                logger.error({ err, platform: 'wecom' }, 'Failed to send to WeCom')
+                logger.error({ err: errorMessage, platform: 'wecom' }, 'Failed to send to WeCom')
                 results.push({ platform: 'wecom', success: false, error: errorMessage })
             }
         }
 
-        // 发送到 Telegram
         if (TELEGRAM_BOT_TOKEN && TELEGRAM_USER_ID) {
             try {
                 logger.debug({ type, contentLength: content.length }, 'Sending to Telegram')
@@ -257,12 +220,14 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
                 results.push({ platform: 'telegram', success: true })
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-                logger.error({ err, platform: 'telegram' }, 'Failed to send to Telegram')
+                logger.error(
+                    { err: errorMessage, platform: 'telegram' },
+                    'Failed to send to Telegram'
+                )
                 results.push({ platform: 'telegram', success: false, error: errorMessage })
             }
         }
 
-        // 检查是否全部成功
         const allSuccess = results.length > 0 && results.every((r) => r.success)
 
         logger.info({ results, allSuccess }, 'Broadcast completed')

@@ -24,6 +24,7 @@ import {
     type TelegramDownloadFn
 } from '../storage/message-store.js'
 import { logger } from '../logger.js'
+import { retry } from '../utils/retry.js'
 
 /**
  * Telegram 适配器配置接口
@@ -43,7 +44,7 @@ export interface TelegramConfig {
 }
 
 /** 文件下载最大重试次数 */
-const MAX_RETRIES = 3
+const MAX_RETRIES = 5
 /** 重试延迟时间（毫秒） */
 const RETRY_DELAY = 2000
 
@@ -91,7 +92,7 @@ export class TelegramAdapter implements IAdapter {
         this.token = config.token
         const options: TelegramBot.ConstructorOptions = {
             polling: {
-                interval: 500, // 轮询间隔（毫秒）
+                interval: 1000, // 轮询间隔（毫秒）
                 autoStart: false, // 不自动开始轮询
                 params: {
                     timeout: 10, // 长轮询超时时间（秒）
@@ -266,15 +267,19 @@ export class TelegramAdapter implements IAdapter {
      * @param content - 消息内容
      */
     async sendMessage(msg: StandardMessage, content: string): Promise<void> {
-        try {
-            const chatId = parseInt(msg.from, 10)
-            await this.bot.sendMessage(chatId, content)
-            await saveOutgoingMessage(msg, 'text', content)
-            logger.debug({ to: msg.from, content }, 'Telegram message sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send Telegram message')
-            throw err
-        }
+        const chatId = parseInt(msg.from, 10)
+        await retry(
+            async () => {
+                await this.bot.sendMessage(chatId, content)
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendMessage'
+            }
+        )
+        await saveOutgoingMessage(msg, 'text', content)
+        logger.debug({ to: msg.from, content }, 'Telegram message sent')
     }
 
     /**
@@ -295,15 +300,19 @@ export class TelegramAdapter implements IAdapter {
      * @param content - Markdown 格式内容
      */
     async sendMarkdown(msg: StandardMessage, content: string): Promise<void> {
-        try {
-            const chatId = parseInt(msg.from, 10)
-            await this.bot.sendMessage(chatId, content, { parse_mode: 'MarkdownV2' })
-            await saveOutgoingMessage(msg, 'markdown', content)
-            logger.debug({ to: msg.from, content }, 'Telegram markdown message sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send Telegram markdown message')
-            throw err
-        }
+        const chatId = parseInt(msg.from, 10)
+        await retry(
+            async () => {
+                await this.bot.sendMessage(chatId, content, { parse_mode: 'MarkdownV2' })
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendMarkdown'
+            }
+        )
+        await saveOutgoingMessage(msg, 'markdown', content)
+        logger.debug({ to: msg.from, content }, 'Telegram markdown message sent')
     }
 
     /**
@@ -313,15 +322,19 @@ export class TelegramAdapter implements IAdapter {
      * @param caption - 图片说明（可选）
      */
     async sendImage(msg: StandardMessage, fileId: string, caption?: string): Promise<void> {
-        try {
-            const chatId = parseInt(msg.from, 10)
-            await this.bot.sendPhoto(chatId, fileId, { caption })
-            await saveOutgoingMessage(msg, 'image', caption || null, fileId)
-            logger.debug({ to: msg.from, fileId }, 'Telegram image sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send Telegram image')
-            throw err
-        }
+        const chatId = parseInt(msg.from, 10)
+        await retry(
+            async () => {
+                await this.bot.sendPhoto(chatId, fileId, { caption })
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendImage'
+            }
+        )
+        await saveOutgoingMessage(msg, 'image', caption || null, fileId)
+        logger.debug({ to: msg.from, fileId }, 'Telegram image sent')
     }
 
     /**
@@ -331,15 +344,19 @@ export class TelegramAdapter implements IAdapter {
      * @param caption - 文件说明（可选）
      */
     async sendDocument(msg: StandardMessage, fileId: string, caption?: string): Promise<void> {
-        try {
-            const chatId = parseInt(msg.from, 10)
-            await this.bot.sendDocument(chatId, fileId, { caption })
-            await saveOutgoingMessage(msg, 'file', caption || null, fileId)
-            logger.debug({ to: msg.from, fileId }, 'Telegram document sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send Telegram document')
-            throw err
-        }
+        const chatId = parseInt(msg.from, 10)
+        await retry(
+            async () => {
+                await this.bot.sendDocument(chatId, fileId, { caption })
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendDocument'
+            }
+        )
+        await saveOutgoingMessage(msg, 'file', caption || null, fileId)
+        logger.debug({ to: msg.from, fileId }, 'Telegram document sent')
     }
 
     /**
@@ -388,7 +405,7 @@ export class TelegramAdapter implements IAdapter {
 
         // 监听错误事件
         this.bot.on('error', (err) => {
-            logger.error({ err }, 'Telegram bot error')
+            logger.error({ err: err.message }, 'Telegram bot error')
         })
 
         // 监听轮询错误事件

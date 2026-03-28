@@ -7,6 +7,7 @@
 
 import Fastify, { FastifyInstance } from 'fastify'
 import { logger } from './logger.js'
+import { authHook } from './auth.js'
 import { getLanService } from './lan/service.js'
 import {
     queryMessages,
@@ -34,8 +35,10 @@ import { registerPushApiRoutes } from './router/push_api.js'
  */
 export async function createServer(): Promise<FastifyInstance> {
     const fastify = Fastify({
-        logger: false // 禁用 Fastify 内置日志，使用自定义日志
+        logger: false
     })
+
+    fastify.addHook('onRequest', authHook)
 
     /**
      * 健康检查接口
@@ -166,6 +169,38 @@ export async function createServer(): Promise<FastifyInstance> {
             instance.get('/stats', async () => {
                 const stats = getStats()
                 return { success: true, ...stats }
+            })
+
+            /**
+             * 查询 action 消息列表
+             * GET /msg/actions
+             *
+             * action 消息: 收到的消息(direction='in') + text类型 + 以'/'开头
+             *
+             * 查询参数:
+             * - platform: 按平台筛选
+             * - chatid: 按会话 ID 筛选
+             * - userid: 按用户 ID 筛选
+             * - last: 查询最近时间段的消息，格式: 数字+单位
+             *         例如: "5m"(5分钟)、"30m"(30分钟)、"2h"(2小时)、"3d"(3天)
+             * - limit: 返回数量限制，默认 50
+             * - offset: 偏移量，用于分页
+             */
+            instance.get('/actions', async (request) => {
+                const query = request.query as MessageQuery
+                const actionQuery: MessageQuery = {
+                    ...query,
+                    isAction: true
+                }
+                const messages = queryMessages(actionQuery)
+                const total = countMessages(actionQuery)
+                return {
+                    success: true,
+                    total,
+                    limit: query.limit || 50,
+                    offset: query.offset || 0,
+                    messages
+                }
             })
 
             /**

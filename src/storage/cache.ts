@@ -150,7 +150,8 @@ export async function downloadMedia(
         logger.debug({ path: filePath, size: buffer.length, platform }, 'Downloaded media')
         return { path: filePath, filename, size: buffer.length }
     } catch (error) {
-        logger.error({ error, url, platform }, 'Failed to download media')
+        const err = error as Error
+        logger.error({ error: err.message, url, platform }, 'Failed to download media')
         throw error
     }
 }
@@ -251,7 +252,8 @@ export function deleteCachedFile(path: string): boolean {
         }
         return false
     } catch (error) {
-        logger.error({ error, path }, 'Failed to delete cached file')
+        const err = error as Error
+        logger.error({ error: err.message, path }, 'Failed to delete cached file')
         return false
     }
 }

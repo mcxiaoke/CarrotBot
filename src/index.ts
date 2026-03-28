@@ -29,6 +29,7 @@ const PORT = parseInt(process.env.PORT || '3123', 10)
 const ROUTER_IP = process.env.ROUTER_IP || ''
 const ROUTER_PASSWORD = process.env.ROUTER_PASSWORD || ''
 const DATA_PATH = process.env.DATA_PATH || './data'
+const LOG_LEVEL = process.env.LOG_LEVEL || 'info'
 
 // Telegram 代理配置
 const TELEGRAM_PROXY_TYPE = process.env.TELEGRAM_PROXY_TYPE as 'http' | 'socks' | undefined
@@ -53,7 +54,9 @@ async function main() {
     router.register(new PingAction())
     router.register(new HelpAction(router))
     router.register(new LanAction())
-    router.setDefault(new DebugAction()) // 默认处理器，用于调试
+    if (LOG_LEVEL === 'debug') {
+        router.setDefault(new DebugAction())
+    }
 
     // 3. 初始化 LAN 服务（如果配置了路由器）
     if (ROUTER_IP && ROUTER_PASSWORD) {

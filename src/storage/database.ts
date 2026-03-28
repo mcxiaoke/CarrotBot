@@ -72,6 +72,11 @@ export interface MessageQuery {
      * 单位: m-分钟, h-小时, d-天
      */
     last?: string
+    /**
+     * 是否只查询 action 消息
+     * action 消息: direction='in', msgtype='text', content 以 '/' 开头
+     */
+    isAction?: boolean
 }
 
 /**
@@ -262,8 +267,12 @@ export function queryMessages(query: MessageQuery): MessageRecord[] {
         conditions.push('created_at <= @endDate')
         params.endDate = query.endDate
     }
+    if (query.isAction) {
+        conditions.push("direction = 'in'")
+        conditions.push("msgtype = 'text'")
+        conditions.push("content LIKE '/%'")
+    }
 
-    // 构建 SQL 语句
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
     const limit = query.limit || 50
     const offset = query.offset || 0
@@ -350,6 +359,11 @@ export function countMessages(query: MessageQuery): number {
     if (query.endDate) {
         conditions.push('created_at <= @endDate')
         params.endDate = query.endDate
+    }
+    if (query.isAction) {
+        conditions.push("direction = 'in'")
+        conditions.push("msgtype = 'text'")
+        conditions.push("content LIKE '/%'")
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''

@@ -19,6 +19,7 @@ import { generateReqId } from '@wecom/aibot-node-sdk'
 import type { IAdapter, StandardMessage, MessageType } from '../core/types.js'
 import { saveIncomingMessage, saveOutgoingMessage } from '../storage/message-store.js'
 import { logger } from '../logger.js'
+import { retry } from '../utils/retry.js'
 
 /**
  * 企业微信适配器配置接口
@@ -200,18 +201,22 @@ export class WeComAdapter implements IAdapter {
      * @param content - 文本内容
      */
     async sendText(msg: StandardMessage, content: string): Promise<void> {
-        try {
-            const frame = msg.raw as WsFrame
-            await this.client.reply(frame, {
-                msgtype: 'text',
-                text: { content }
-            })
-            await saveOutgoingMessage(msg, 'text', content)
-            logger.debug({ to: msg.from, content }, 'Text message sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send text message')
-            throw err
-        }
+        const frame = msg.raw as WsFrame
+        await retry(
+            async () => {
+                await this.client.reply(frame, {
+                    msgtype: 'text',
+                    text: { content }
+                })
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendText'
+            }
+        )
+        await saveOutgoingMessage(msg, 'text', content)
+        logger.debug({ to: msg.from, content }, 'Text message sent')
     }
 
     /**
@@ -220,18 +225,22 @@ export class WeComAdapter implements IAdapter {
      * @param content - Markdown 格式内容
      */
     async sendMarkdown(msg: StandardMessage, content: string): Promise<void> {
-        try {
-            const frame = msg.raw as WsFrame
-            await this.client.reply(frame, {
-                msgtype: 'markdown',
-                markdown: { content }
-            })
-            await saveOutgoingMessage(msg, 'markdown', content)
-            logger.debug({ to: msg.from, content }, 'Markdown message sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send markdown message')
-            throw err
-        }
+        const frame = msg.raw as WsFrame
+        await retry(
+            async () => {
+                await this.client.reply(frame, {
+                    msgtype: 'markdown',
+                    markdown: { content }
+                })
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendMarkdown'
+            }
+        )
+        await saveOutgoingMessage(msg, 'markdown', content)
+        logger.debug({ to: msg.from, content }, 'Markdown message sent')
     }
 
     /**
@@ -240,15 +249,19 @@ export class WeComAdapter implements IAdapter {
      * @param mediaId - 媒体文件 ID（需先上传获取）
      */
     async sendImage(msg: StandardMessage, mediaId: string): Promise<void> {
-        try {
-            const frame = msg.raw as WsFrame
-            await this.client.replyMedia(frame, 'image', mediaId)
-            await saveOutgoingMessage(msg, 'image', null, mediaId)
-            logger.debug({ to: msg.from, mediaId }, 'Image message sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send image message')
-            throw err
-        }
+        const frame = msg.raw as WsFrame
+        await retry(
+            async () => {
+                await this.client.replyMedia(frame, 'image', mediaId)
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendImage'
+            }
+        )
+        await saveOutgoingMessage(msg, 'image', null, mediaId)
+        logger.debug({ to: msg.from, mediaId }, 'Image message sent')
     }
 
     /**
@@ -257,15 +270,19 @@ export class WeComAdapter implements IAdapter {
      * @param mediaId - 媒体文件 ID
      */
     async sendVoice(msg: StandardMessage, mediaId: string): Promise<void> {
-        try {
-            const frame = msg.raw as WsFrame
-            await this.client.replyMedia(frame, 'voice', mediaId)
-            await saveOutgoingMessage(msg, 'voice', null, mediaId)
-            logger.debug({ to: msg.from, mediaId }, 'Voice message sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send voice message')
-            throw err
-        }
+        const frame = msg.raw as WsFrame
+        await retry(
+            async () => {
+                await this.client.replyMedia(frame, 'voice', mediaId)
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendVoice'
+            }
+        )
+        await saveOutgoingMessage(msg, 'voice', null, mediaId)
+        logger.debug({ to: msg.from, mediaId }, 'Voice message sent')
     }
 
     /**
@@ -281,15 +298,19 @@ export class WeComAdapter implements IAdapter {
         title?: string,
         description?: string
     ): Promise<void> {
-        try {
-            const frame = msg.raw as WsFrame
-            await this.client.replyMedia(frame, 'video', mediaId, { title, description })
-            await saveOutgoingMessage(msg, 'video', null, mediaId)
-            logger.debug({ to: msg.from, mediaId }, 'Video message sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send video message')
-            throw err
-        }
+        const frame = msg.raw as WsFrame
+        await retry(
+            async () => {
+                await this.client.replyMedia(frame, 'video', mediaId, { title, description })
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendVideo'
+            }
+        )
+        await saveOutgoingMessage(msg, 'video', null, mediaId)
+        logger.debug({ to: msg.from, mediaId }, 'Video message sent')
     }
 
     /**
@@ -298,15 +319,19 @@ export class WeComAdapter implements IAdapter {
      * @param mediaId - 媒体文件 ID
      */
     async sendFile(msg: StandardMessage, mediaId: string): Promise<void> {
-        try {
-            const frame = msg.raw as WsFrame
-            await this.client.replyMedia(frame, 'file', mediaId)
-            await saveOutgoingMessage(msg, 'file', null, mediaId)
-            logger.debug({ to: msg.from, mediaId }, 'File message sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send file message')
-            throw err
-        }
+        const frame = msg.raw as WsFrame
+        await retry(
+            async () => {
+                await this.client.replyMedia(frame, 'file', mediaId)
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendFile'
+            }
+        )
+        await saveOutgoingMessage(msg, 'file', null, mediaId)
+        logger.debug({ to: msg.from, mediaId }, 'File message sent')
     }
 
     /**
@@ -318,15 +343,19 @@ export class WeComAdapter implements IAdapter {
      * @param card - 模板卡片数据
      */
     async sendTemplateCard(msg: StandardMessage, card: TemplateCard): Promise<void> {
-        try {
-            const frame = msg.raw as WsFrame
-            await this.client.replyTemplateCard(frame, card)
-            await saveOutgoingMessage(msg, 'template_card', JSON.stringify(card))
-            logger.debug({ to: msg.from }, 'Template card sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send template card')
-            throw err
-        }
+        const frame = msg.raw as WsFrame
+        await retry(
+            async () => {
+                await this.client.replyTemplateCard(frame, card)
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendTemplateCard'
+            }
+        )
+        await saveOutgoingMessage(msg, 'template_card', JSON.stringify(card))
+        logger.debug({ to: msg.from }, 'Template card sent')
     }
 
     /**
@@ -346,17 +375,21 @@ export class WeComAdapter implements IAdapter {
         content: string,
         finish: boolean
     ): Promise<void> {
-        try {
-            const frame = msg.raw as WsFrame
-            await this.client.replyStream(frame, streamId, content, finish)
-            if (finish) {
-                await saveOutgoingMessage(msg, 'stream', content)
+        const frame = msg.raw as WsFrame
+        await retry(
+            async () => {
+                await this.client.replyStream(frame, streamId, content, finish)
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendStream'
             }
-            logger.debug({ to: msg.from, streamId, finish }, 'Stream message sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send stream message')
-            throw err
+        )
+        if (finish) {
+            await saveOutgoingMessage(msg, 'stream', content)
         }
+        logger.debug({ to: msg.from, streamId, finish }, 'Stream message sent')
     }
 
     /**
@@ -377,16 +410,20 @@ export class WeComAdapter implements IAdapter {
         finish: boolean,
         card: TemplateCard
     ): Promise<void> {
-        try {
-            const frame = msg.raw as WsFrame
-            await this.client.replyStreamWithCard(frame, streamId, content, finish, {
-                templateCard: card
-            })
-            logger.debug({ to: msg.from, streamId, finish }, 'Stream with card sent')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to send stream with card')
-            throw err
-        }
+        const frame = msg.raw as WsFrame
+        await retry(
+            async () => {
+                await this.client.replyStreamWithCard(frame, streamId, content, finish, {
+                    templateCard: card
+                })
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'sendStreamWithCard'
+            }
+        )
+        logger.debug({ to: msg.from, streamId, finish }, 'Stream with card sent')
     }
 
     /**
@@ -403,14 +440,18 @@ export class WeComAdapter implements IAdapter {
         card: TemplateCard,
         userids?: string[]
     ): Promise<void> {
-        try {
-            const frame = msg.raw as WsFrame
-            await this.client.updateTemplateCard(frame, card, userids)
-            logger.debug({ to: msg.from }, 'Template card updated')
-        } catch (err) {
-            logger.error({ err, to: msg.from }, 'Failed to update template card')
-            throw err
-        }
+        const frame = msg.raw as WsFrame
+        await retry(
+            async () => {
+                await this.client.updateTemplateCard(frame, card, userids)
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'updateTemplateCard'
+            }
+        )
+        logger.debug({ to: msg.from }, 'Template card updated')
     }
 
     /**
@@ -436,14 +477,19 @@ export class WeComAdapter implements IAdapter {
         type: 'image' | 'voice' | 'video' | 'file',
         filename: string
     ): Promise<string> {
-        try {
-            const result = await this.client.uploadMedia(fileBuffer, { type, filename })
-            logger.debug({ type, mediaId: result.media_id }, 'Media uploaded')
-            return result.media_id
-        } catch (err) {
-            logger.error({ err, type }, 'Failed to upload media')
-            throw err
-        }
+        const result = await retry(
+            async () => {
+                const res = await this.client.uploadMedia(fileBuffer, { type, filename })
+                return res.media_id
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'uploadMedia'
+            }
+        )
+        logger.debug({ type, mediaId: result }, 'Media uploaded')
+        return result
     }
 
     /**
@@ -459,14 +505,18 @@ export class WeComAdapter implements IAdapter {
         url: string,
         aesKey: string
     ): Promise<{ buffer: Buffer; filename?: string }> {
-        try {
-            const result = await this.client.downloadFile(url, aesKey)
-            logger.debug({ url }, 'File downloaded')
-            return result
-        } catch (err) {
-            logger.error({ err, url }, 'Failed to download file')
-            throw err
-        }
+        const result = await retry(
+            async () => {
+                return await this.client.downloadFile(url, aesKey)
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'downloadFile'
+            }
+        )
+        logger.debug({ url }, 'File downloaded')
+        return result
     }
 
     /**
@@ -478,16 +528,20 @@ export class WeComAdapter implements IAdapter {
      * @param content - 消息内容（Markdown 格式）
      */
     async pushMessage(chatid: string, content: string): Promise<void> {
-        try {
-            await this.client.sendMessage(chatid, {
-                msgtype: 'markdown',
-                markdown: { content }
-            })
-            logger.debug({ chatid, content }, 'Push message sent')
-        } catch (err) {
-            logger.error({ err, chatid }, 'Failed to push message')
-            throw err
-        }
+        await retry(
+            async () => {
+                await this.client.sendMessage(chatid, {
+                    msgtype: 'markdown',
+                    markdown: { content }
+                })
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'pushMessage'
+            }
+        )
+        logger.debug({ chatid, content }, 'Push message sent')
     }
 
     /**
@@ -504,13 +558,17 @@ export class WeComAdapter implements IAdapter {
         type: 'image' | 'voice' | 'video' | 'file',
         mediaId: string
     ): Promise<void> {
-        try {
-            await this.client.sendMediaMessage(chatid, type, mediaId)
-            logger.debug({ chatid, type, mediaId }, 'Push media message sent')
-        } catch (err) {
-            logger.error({ err, chatid }, 'Failed to push media message')
-            throw err
-        }
+        await retry(
+            async () => {
+                await this.client.sendMediaMessage(chatid, type, mediaId)
+            },
+            {
+                maxRetries: 3,
+                baseDelay: 1000,
+                operationName: 'pushMediaMessage'
+            }
+        )
+        logger.debug({ chatid, type, mediaId }, 'Push media message sent')
     }
 
     /**
@@ -569,7 +627,7 @@ export class WeComAdapter implements IAdapter {
 
         // 错误事件
         this.client.on('error', (err: Error) => {
-            logger.error({ err }, 'WeCom WebSocket error')
+            logger.error({ err: err.message }, 'WeCom WebSocket error')
         })
     }
 
@@ -589,7 +647,8 @@ export class WeComAdapter implements IAdapter {
                 text: { content: '你好！我是 CarrotBot，发送 /help 查看可用命令。' }
             })
         } catch (err) {
-            logger.error({ err }, 'Failed to send welcome message')
+            const error = err as Error
+            logger.error({ err: error.message }, 'Failed to send welcome message')
         }
     }
 

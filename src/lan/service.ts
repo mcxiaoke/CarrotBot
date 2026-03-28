@@ -96,7 +96,8 @@ export class LanService {
                 logger.debug(`设备列表未更新: ${hosts.length} 台设备在线`)
             }
         } catch (error) {
-            logger.error({ error }, '刷新设备列表失败')
+            const err = error as Error
+            logger.error({ error: err.message }, '刷新设备列表失败')
         } finally {
             this.isRefreshing = false
         }

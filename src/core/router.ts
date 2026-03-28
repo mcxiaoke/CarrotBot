@@ -85,11 +85,13 @@ export class MessageRouter {
                     // 执行匹配的处理器
                     await action.execute(msg, adapter)
                 } catch (err) {
-                    // 处理执行过程中的错误
-                    logger.error({ err, action: action.name }, 'Action execution failed')
+                    const error = err as Error
+                    logger.error(
+                        { err: error.message, action: action.name },
+                        'Action execution failed'
+                    )
                     try {
-                        // 尝试向用户发送错误信息
-                        await adapter.sendMessage(msg, `执行命令时出错: ${err}`)
+                        await adapter.sendMessage(msg, `执行命令时出错: ${error.message}`)
                     } catch (sendErr) {
                         logger.error({ sendErr }, 'Failed to send error message')
                     }
@@ -103,7 +105,11 @@ export class MessageRouter {
             try {
                 await this.defaultAction.execute(msg, adapter)
             } catch (err) {
-                logger.error({ err, action: 'default' }, 'Default action execution failed')
+                const error = err as Error
+                logger.error(
+                    { err: error.message, action: 'default' },
+                    'Default action execution failed'
+                )
             }
         } else {
             logger.warn({ msg }, 'No action matched and no default action set')
