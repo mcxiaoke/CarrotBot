@@ -34,6 +34,7 @@ const ROUTER_IP = process.env.ROUTER_IP || ''
 const ROUTER_PASSWORD = process.env.ROUTER_PASSWORD || ''
 const DATA_PATH = process.env.DATA_PATH || './data'
 const LOG_LEVEL = process.env.LOG_LEVEL || 'info'
+const WECOM_BOT_NAME = process.env.WECOM_BOT_NAME || ''
 
 // 平台启用标志
 const WECOM_ENABLED = process.env.WECOM_ENABLED !== 'false'
@@ -99,7 +100,8 @@ async function main() {
     if (WECOM_ENABLED && wecomBotId && wecomBotSecret) {
         const wecomAdapter = new WeComAdapter({
             botId: wecomBotId,
-            botSecret: wecomBotSecret
+            botSecret: wecomBotSecret,
+            botName: WECOM_BOT_NAME || undefined
         })
 
         // 设置消息处理回调

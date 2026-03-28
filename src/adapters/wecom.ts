@@ -29,6 +29,8 @@ export interface WeComConfig {
     botId: string
     /** 机器人密钥，从企业微信管理后台获取 */
     botSecret: string
+    /** 机器人名称，用于在群聊中识别 @ 消息（可选） */
+    botName?: string
 }
 
 /**
@@ -77,6 +79,9 @@ export class WeComAdapter implements IAdapter {
     /** WebSocket 客户端实例 */
     private client: WSClient
 
+    /** 机器人名称（用于处理群聊 @ 消息） */
+    private botName: string | undefined
+
     /** 消息处理回调函数 */
     private onMessage: ((msg: StandardMessage) => void) | null = null
 
@@ -92,6 +97,7 @@ export class WeComAdapter implements IAdapter {
             botId: config.botId,
             secret: config.botSecret
         })
+        this.botName = config.botName
     }
 
     /**
@@ -119,6 +125,10 @@ export class WeComAdapter implements IAdapter {
             case 'text':
                 // 文本消息
                 content = (body.text as Record<string, string>)?.content || ''
+                // 处理群聊中 @ 机器人的消息，strip 掉 @机器人名 前缀
+                if (this.botName && content.startsWith(`@${this.botName}`)) {
+                    content = content.slice(this.botName.length + 1).trim()
+                }
                 msgType = 'text'
                 break
             case 'image':
@@ -600,29 +610,53 @@ export class WeComAdapter implements IAdapter {
             logger.info('WeCom WebSocket authenticated')
         })
 
-        // 收到消息事件
+        // 监听各类消息事件（使用 SDK 推荐的具体事件类型）
+        this.client.on('message.text', (frame: WsFrame) => {
+            this.handleMessage(frame, 'text')
+        })
+        this.client.on('message.image', (frame: WsFrame) => {
+            this.handleMessage(frame, 'image')
+        })
+        this.client.on('message.voice', (frame: WsFrame) => {
+            this.handleMessage(frame, 'voice')
+        })
+        this.client.on('message.file', (frame: WsFrame) => {
+            this.handleMessage(frame, 'file')
+        })
+        this.client.on('message.mixed', (frame: WsFrame) => {
+            this.handleMessage(frame, 'mixed')
+        })
+        // 通用消息事件（处理其他类型如 video 等）
         this.client.on('message', (frame: WsFrame) => {
             const body = frame.body as Record<string, unknown>
             const msgtype = body.msgtype as string
-            logger.debug({ msgtype, msgid: body.msgid }, 'Received message')
-            this.handleMessage(frame, msgtype)
+            // 只处理未在上面监听的类型
+            if (!['text', 'image', 'voice', 'file', 'mixed'].includes(msgtype)) {
+                logger.debug({ msgtype, msgid: body.msgid }, 'Received other message type')
+                this.handleMessage(frame, msgtype)
+            }
         })
 
-        // 收到事件事件
-        this.client.on('event', (frame: WsFrame) => {
-            const body = frame.body as Record<string, unknown>
-            const eventType = (body.event as Record<string, string>)?.eventtype
-            logger.debug({ eventType, frame }, 'Received event')
-
-            // 处理进入会话事件
-            if (eventType === 'enter_chat') {
-                this.handleEnterChat(frame)
+        // 监听各类事件（使用 SDK 推荐的具体事件类型）
+        this.client.on('event.enter_chat', (frame: WsFrame) => {
+            this.handleEnterChat(frame)
+        })
+        this.client.on('event.template_card_event', (frame: WsFrame) => {
+            logger.debug({ frame }, 'Received template_card_event')
+            if (this.onEvent) {
+                this.onEvent({ type: 'template_card_event', frame })
+            }
+        })
+        this.client.on('event.feedback_event', (frame: WsFrame) => {
+            logger.debug({ frame }, 'Received feedback_event')
+            if (this.onEvent) {
+                this.onEvent({ type: 'feedback_event', frame })
             }
         })
 
         // 断开连接事件
-        this.client.on('disconnected', () => {
-            logger.warn('WeCom WebSocket disconnected')
+        this.client.on('disconnected', (reason: string) => {
+            logger.warn({ reason }, 'WeCom WebSocket disconnected')
         })
 
         // 错误事件

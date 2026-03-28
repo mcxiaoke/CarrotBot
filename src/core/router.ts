@@ -71,11 +71,23 @@ export class MessageRouter {
      * 遍历所有已注册的处理器，找到第一个匹配的处理器并执行。
      * 如果没有匹配的处理器，执行默认处理器（如果设置了）。
      *
+     * 注意：只有以 '/' 开头的文本消息才会被路由到命令处理器。
+     * 其他消息（如普通聊天消息、图片等）将被忽略。
+     *
      * @param msg - 标准消息对象
      * @param adapter - 平台适配器，用于发送回复
      */
     async dispatch(msg: StandardMessage, adapter: IAdapter): Promise<void> {
         logger.debug({ msg }, 'Dispatching message')
+
+        // 只有以 '/' 开头的文本消息才走 action 流程
+        if (msg.msgType !== 'text' || !msg.content.startsWith('/')) {
+            logger.debug(
+                { msgType: msg.msgType, content: msg.content },
+                'Message ignored (not a command)'
+            )
+            return
+        }
 
         // 遍历所有已注册的处理器，查找匹配的处理器
         for (const action of this.actions) {
