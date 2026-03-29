@@ -362,7 +362,7 @@ export class TPLinkRouter {
             await new Promise((resolve) => setTimeout(resolve, 200))
             const data = response.data
             if (data.error_code === 0) {
-                logger.debug('路由器登录成功')
+                logger.info('路由器登录成功')
                 this.stok = data.stok
                 return true
             }

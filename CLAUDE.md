@@ -23,6 +23,7 @@ CarrotBot 是一个多平台消息网关，支持企业微信和 Telegram 机器
 - `src/actions/`: 命令处理器（ping、help、debug、lan）
 - `src/lan/`: 局域网监控服务（支持 TP-Link 路由器）
 - `src/services/`: 后台服务（推送任务）
+- `src/websocket/`: WebSocket 消息转发服务
 - `src/storage/`: SQLite 数据库和文件缓存管理
 - `src/router/`: HTTP API 路由
 - `src/utils/`: 工具模块（重试机制）
@@ -64,6 +65,13 @@ CarrotBot 是一个多平台消息网关，支持企业微信和 Telegram 机器
 
 - `TELEGRAM_PROXY_TYPE`: http 或 socks
 - `TELEGRAM_PROXY_HOST` + `TELEGRAM_PROXY_PORT`
+
+WebSocket 服务配置：
+
+- `WS_ENABLED`: 是否启用 WebSocket 服务（默认：true）
+- `WS_CACHE_DURATION`: 消息缓存时间毫秒数（默认：300000，即 5 分钟）
+- `WS_HEARTBEAT_INTERVAL`: 心跳检测间隔毫秒数（默认：30000，即 30 秒）
+- `WS_HEARTBEAT_TIMEOUT`: 心跳超时时间毫秒数（默认：60000，即 60 秒）
 
 ## 添加新功能
 
@@ -115,6 +123,11 @@ API 接口（需要认证）：
 - `POST /api/push/send/all` - 广播消息到所有平台
 - `GET /api/push/status` - 获取推送平台配置状态
 
+WebSocket 接口：
+
+- `WS /ws` - WebSocket 连接端点，实时接收消息
+- `GET /api/ws/status` - 获取 WebSocket 服务状态
+
 认证方式：
 
 - GET/DELETE 请求：通过 query 参数传递 token (?token=xxx)
@@ -135,6 +148,7 @@ SQLite 数据库位于 `${DATA_PATH}/messages.db`，存储：
 - **数据库**: better-sqlite3
 - **企业微信 SDK**: @wecom/aibot-node-sdk (WebSocket 模式)
 - **Telegram SDK**: node-telegram-bot-api
+- **WebSocket**: ws
 - **开发工具**: TypeScript, tsx (热重载)
 - **代码质量**: ESLint, Prettier
 

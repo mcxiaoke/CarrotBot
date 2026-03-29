@@ -35,6 +35,7 @@ import {
 import { pushService, type PushJob } from './services/push.js'
 import { registerPushApiRoutes } from './router/push_api.js'
 import { registerAdminRoutes } from './router/admin.js'
+import { registerWebSocketRoutes } from './router/ws.js'
 
 /**
  * API 接口文档定义
@@ -374,6 +375,8 @@ export async function createServer(): Promise<FastifyInstance> {
      * 公开接口，返回 HTML 页面
      */
     fastify.register(registerAdminRoutes)
+
+    await registerWebSocketRoutes(fastify)
 
     /**
      * API 接口路由

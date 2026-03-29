@@ -6,6 +6,7 @@
  * - 创建消息路由器
  * - 注册命令处理器
  * - 初始化 LAN 服务
+ * - 初始化 WebSocket 服务
  * - 连接平台适配器
  * - 启动 HTTP 服务器
  * - 处理优雅关闭
@@ -23,6 +24,7 @@ import { LanAction } from './actions/lan.js'
 import { initLanService } from './lan/service.js'
 import { initMessageStore, closeMessageStore } from './storage/message-store.js'
 import { pushService } from './services/push.js'
+import { wsMessageService } from './websocket/service.js'
 import { logger } from './logger.js'
 
 // 加载 .env 文件（如果存在）
@@ -44,6 +46,12 @@ const TELEGRAM_ENABLED = process.env.TELEGRAM_ENABLED !== 'false'
 const TELEGRAM_PROXY_TYPE = process.env.TELEGRAM_PROXY_TYPE as 'http' | 'socks' | undefined
 const TELEGRAM_PROXY_HOST = process.env.TELEGRAM_PROXY_HOST || ''
 const TELEGRAM_PROXY_PORT = parseInt(process.env.TELEGRAM_PROXY_PORT || '0', 10)
+
+// WebSocket 服务配置
+const WS_ENABLED = process.env.WS_ENABLED !== 'false'
+const WS_CACHE_DURATION = parseInt(process.env.WS_CACHE_DURATION || '300000', 10)
+const WS_HEARTBEAT_INTERVAL = parseInt(process.env.WS_HEARTBEAT_INTERVAL || '30000', 10)
+const WS_HEARTBEAT_TIMEOUT = parseInt(process.env.WS_HEARTBEAT_TIMEOUT || '60000', 10)
 
 /**
  * 主函数
@@ -93,6 +101,26 @@ async function main() {
         logger.warn('LAN Service disabled: ROUTER_IP or ROUTER_PASSWORD not set')
     }
 
+    // 3.5 初始化 WebSocket 消息转发服务
+    if (WS_ENABLED) {
+        wsMessageService.init({
+            enabled: true,
+            cacheDuration: WS_CACHE_DURATION,
+            heartbeatInterval: WS_HEARTBEAT_INTERVAL,
+            heartbeatTimeout: WS_HEARTBEAT_TIMEOUT
+        })
+        logger.info(
+            {
+                cacheDuration: WS_CACHE_DURATION,
+                heartbeatInterval: WS_HEARTBEAT_INTERVAL,
+                heartbeatTimeout: WS_HEARTBEAT_TIMEOUT
+            },
+            'WebSocket service initialized'
+        )
+    } else {
+        logger.info('WebSocket service disabled by WS_ENABLED=false')
+    }
+
     // 4. 初始化平台适配器
     const adapters: { name: string; adapter: WeComAdapter | TelegramAdapter }[] = []
 
@@ -106,6 +134,7 @@ async function main() {
 
         // 设置消息处理回调
         wecomAdapter.setMessageHandler((msg) => {
+            wsMessageService.broadcast(msg)
             router.dispatch(msg, wecomAdapter)
         })
 
@@ -137,6 +166,7 @@ async function main() {
 
         // 设置消息处理回调
         telegramAdapter.setMessageHandler((msg) => {
+            wsMessageService.broadcast(msg)
             router.dispatch(msg, telegramAdapter)
         })
 
@@ -155,6 +185,9 @@ async function main() {
     // 6. 注册优雅关闭处理
     const shutdown = () => {
         logger.info('Shutting down...')
+
+        // 关闭 WebSocket 服务
+        wsMessageService.close()
 
         // 停止推送服务
         pushService.stop()
