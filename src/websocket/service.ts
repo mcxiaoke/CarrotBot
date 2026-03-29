@@ -26,14 +26,9 @@ interface WsConfig {
  *
  * 单例模式，管理所有 WebSocket 客户端连接和消息转发
  */
-interface CachedMessage {
-    message: StandardMessage
-    receivedAt: number
-}
-
 class WsMessageService {
     private clients: Map<WebSocket, WsClient> = new Map()
-    private recentMessages: CachedMessage[] = []
+    private recentMessages: StandardMessage[] = []
     private config: WsConfig
     private cleanupInterval: ReturnType<typeof setInterval> | null = null
     private heartbeatCheckInterval: ReturnType<typeof setInterval> | null = null
@@ -41,7 +36,7 @@ class WsMessageService {
 
     constructor() {
         this.config = {
-            cacheDuration: 2 * 60 * 1000,
+            cacheDuration: 3 * 60 * 1000,
             enabled: true,
             heartbeatInterval: 30 * 1000,
             heartbeatTimeout: 90 * 1000
@@ -168,6 +163,7 @@ class WsMessageService {
             timestamp: new Date().toISOString(),
             data: message
         }
+
         const payload = JSON.stringify(wsMessage)
 
         let sentCount = 0
@@ -255,10 +251,7 @@ class WsMessageService {
     }
 
     private cacheMessage(message: StandardMessage): void {
-        this.recentMessages.push({
-            message,
-            receivedAt: Date.now()
-        })
+        this.recentMessages.push(message)
         this.cleanupOldMessages()
     }
 
@@ -267,13 +260,16 @@ class WsMessageService {
         if (this.recentMessages.length === 0) {
             return null
         }
-        return this.recentMessages[this.recentMessages.length - 1].message
+        return this.recentMessages[this.recentMessages.length - 1]
     }
 
     private cleanupOldMessages(): void {
         const now = Date.now()
         const cutoff = now - this.config.cacheDuration
-        this.recentMessages = this.recentMessages.filter((cached) => cached.receivedAt > cutoff)
+        this.recentMessages = this.recentMessages.filter((msg) => {
+            const createdAt = msg.createdAt || now
+            return createdAt > cutoff
+        })
     }
 
     private startCleanupInterval(): void {

@@ -120,6 +120,8 @@ export class WeComAdapter implements IAdapter {
         let mediaKey: string | undefined
         let aesKey: string | undefined
 
+        logger.debug(`parse wecom message: [msgtype=${msgtype}]`)
+
         // 根据消息类型解析不同的消息内容
         switch (msgtype) {
             case 'text':
@@ -192,7 +194,8 @@ export class WeComAdapter implements IAdapter {
             raw,
             mediaUrl,
             mediaKey,
-            aesKey
+            aesKey,
+            createdAt: Date.now()
         }
     }
 
@@ -693,7 +696,6 @@ export class WeComAdapter implements IAdapter {
      */
     private async handleMessage(frame: WsFrame, msgtype: string): Promise<void> {
         const msg = this.parseMessage(frame)
-
         // 保存收到的消息到数据库
         try {
             await saveIncomingMessage(msg, (url, aesKey) => this.downloadFile(url, aesKey))

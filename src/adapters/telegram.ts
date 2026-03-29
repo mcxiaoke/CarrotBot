@@ -136,6 +136,8 @@ export class TelegramAdapter implements IAdapter {
         let msgType: MessageType = 'text'
         let mediaUrl: string | undefined
 
+        logger.debug(`parse telegram message: [msgtype=${msgType}]`)
+
         // 根据消息类型解析不同的消息内容
         if (msg.text) {
             // 文本消息
@@ -193,7 +195,8 @@ export class TelegramAdapter implements IAdapter {
             content: content.trim(),
             msgType,
             raw,
-            mediaUrl
+            mediaUrl,
+            createdAt: Date.now()
         }
     }
 

@@ -42,6 +42,9 @@ export interface StandardMessage {
 
     /** AES 加密密钥（可选，用于企业微信媒体文件解密） */
     aesKey?: string
+
+    /** 消息收到时间（时间戳毫秒） */
+    createdAt?: number
 }
 
 /**
