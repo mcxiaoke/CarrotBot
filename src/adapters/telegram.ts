@@ -24,7 +24,7 @@ import {
     type TelegramDownloadFn
 } from '../storage/message-store.js'
 import { logger } from '../logger.js'
-import { retry } from '../utils/retry.js'
+import { retry, delay } from '../utils/retry.js'
 
 /**
  * Telegram 适配器配置接口
@@ -249,7 +249,7 @@ export class TelegramAdapter implements IAdapter {
 
                 // 如果不是最后一次尝试，等待后重试
                 if (attempt < MAX_RETRIES) {
-                    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY * attempt))
+                    await delay(RETRY_DELAY * attempt)
                 }
             }
         }

@@ -7,6 +7,7 @@
 
 import axios from 'axios'
 import { logger } from '../logger.js'
+import { delay } from '../utils/retry.js'
 /**
  * TP-Link 路由器密码加密常量
  * 用于实现路由器的自定义加密算法
@@ -359,7 +360,7 @@ export class TPLinkRouter {
                 timeout: 5000,
                 headers: { Connection: 'keep-alive' }
             })
-            await new Promise((resolve) => setTimeout(resolve, 200))
+            await delay(200)
             const data = response.data
             if (data.error_code === 0) {
                 logger.info('路由器登录成功')
@@ -404,7 +405,7 @@ export class TPLinkRouter {
 
         const url = `http://${this.ip}/stok=${this.stok}/ds`
         try {
-            await new Promise((resolve) => setTimeout(resolve, 200))
+            await delay(200)
             const response = await axios.post(url, payload, {
                 timeout: 5000,
                 headers: { Connection: 'keep-alive' }

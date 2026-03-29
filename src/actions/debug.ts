@@ -91,7 +91,12 @@ export class DebugAction implements IAction {
             if (msg.aesKey) lines.push(`aesKey: ${msg.aesKey}`)
         } else if (msg.platform === 'telegram') {
             // Telegram 特定字段
-            const tgMsg = raw as any
+            const tgMsg = raw as {
+                chat?: { id?: number; type?: string }
+                from?: { id?: number; username?: string }
+                message_id?: number
+                date?: number
+            }
             lines.push(`---`)
             lines.push(`chat_id: ${tgMsg?.chat?.id || 'N/A'}`)
             lines.push(`chat_type: ${tgMsg?.chat?.type || 'N/A'}`)

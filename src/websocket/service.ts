@@ -9,7 +9,7 @@
  * - 心跳检测和超时断开
  */
 
-import type { WebSocket } from 'ws'
+import { WebSocket } from 'ws'
 import type { StandardMessage } from '../core/types.js'
 import type { WsMessage, WsServiceConfig, WsClient, WsClientParams } from './types.js'
 import { logger } from '../logger.js'
@@ -32,6 +32,7 @@ class WsMessageService {
     private config: WsConfig
     private cleanupInterval: ReturnType<typeof setInterval> | null = null
     private heartbeatCheckInterval: ReturnType<typeof setInterval> | null = null
+    private clientIndex: number = 0
 
     constructor() {
         this.config = {
@@ -166,7 +167,7 @@ class WsMessageService {
 
         let sentCount = 0
         for (const [ws] of this.clients) {
-            if (ws.readyState === 1) {
+            if (ws.readyState === WebSocket.OPEN) {
                 ws.send(payload)
                 sentCount++
             }
@@ -237,12 +238,15 @@ class WsMessageService {
      *
      * 如果提供了 user、os、arch 参数，则使用它们生成 ID
      * 否则使用时间戳和随机字符串生成
+     * ID 后面追加全局递增序号
      */
     private generateClientId(params?: WsClientParams): string {
+        this.clientIndex++
+        const seq = this.clientIndex.toString().padStart(3, '0')
         if (params?.user && params?.os && params?.arch) {
-            return `${params.user}@${params.os}-${params.arch}`
+            return `${params.user}@${params.os}-${params.arch}-${seq}`
         }
-        return `client_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+        return `client_${Date.now()}_${Math.random().toString(36).substring(2, 9)}-${seq}`
     }
 
     private cacheMessage(message: StandardMessage): void {
@@ -301,7 +305,7 @@ class WsMessageService {
     }
 
     private sendMessage(ws: WebSocket, message: StandardMessage): void {
-        if (ws.readyState !== 1) return
+        if (ws.readyState !== WebSocket.OPEN) return
         const wsMessage: WsMessage = {
             type: 'message',
             timestamp: new Date().toISOString(),
@@ -311,7 +315,7 @@ class WsMessageService {
     }
 
     private sendConnected(ws: WebSocket, client: WsClient): void {
-        if (ws.readyState !== 1) return
+        if (ws.readyState !== WebSocket.OPEN) return
         const wsMessage: WsMessage = {
             type: 'connected',
             timestamp: new Date().toISOString()
@@ -327,7 +331,7 @@ class WsMessageService {
     }
 
     private sendPong(ws: WebSocket): void {
-        if (ws.readyState !== 1) return
+        if (ws.readyState !== WebSocket.OPEN) return
         const wsMessage: WsMessage = {
             type: 'pong',
             timestamp: new Date().toISOString()

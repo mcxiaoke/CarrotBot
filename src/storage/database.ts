@@ -303,7 +303,10 @@ export function queryMessages(query: MessageQuery): MessageRecord[] {
  */
 function convertToLocalTime(record: MessageRecord): MessageRecord {
     if (record.created_at) {
-        record.created_at = dayjs.utc(record.created_at).local().format('YYYY-MM-DD HH:mm:ss Z')
+        return {
+            ...record,
+            created_at: dayjs.utc(record.created_at).local().format('YYYY-MM-DD HH:mm:ss Z')
+        }
     }
     return record
 }

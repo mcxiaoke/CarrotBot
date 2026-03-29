@@ -402,7 +402,7 @@ class WecomPusher {
             throw new Error('WECOM_WEBHOOK_URL not configured')
         }
 
-        const msgtype = (body as any).msgtype
+        const msgtype = (body as { msgtype?: string }).msgtype
         logger.debug({ msgtype }, 'WeCom: Sending webhook request')
 
         const response = await axios.post(this.webhookUrl, body)
@@ -558,8 +558,12 @@ async function sendWecomMessage(
             await pusher.sendFile({ type: 'file', mediaId })
             break
         }
-        default:
-            throw new Error(`Unsupported WeCom message type: ${(message as any).type}`)
+        default: {
+            const exhaustiveCheck: never = message
+            throw new Error(
+                `Unsupported WeCom message type: ${(exhaustiveCheck as { type: string }).type}`
+            )
+        }
     }
 }
 
@@ -597,8 +601,12 @@ async function sendTelegramMessage(message: TelegramMessage): Promise<void> {
         case 'document':
             await pusher.sendDocument(message)
             break
-        default:
-            throw new Error(`Unsupported Telegram message type: ${(message as any).type}`)
+        default: {
+            const exhaustiveCheck: never = message
+            throw new Error(
+                `Unsupported Telegram message type: ${(exhaustiveCheck as { type: string }).type}`
+            )
+        }
     }
 }
 
@@ -914,7 +922,10 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
                 logger.info('Push API: Broadcast to WeCom succeeded')
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-                logger.error({ platform: 'wecom', error: errorMessage }, 'Push API: Broadcast to WeCom failed')
+                logger.error(
+                    { platform: 'wecom', error: errorMessage },
+                    'Push API: Broadcast to WeCom failed'
+                )
                 results.push({ platform: 'wecom', success: false, error: errorMessage })
             }
         } else {
@@ -942,7 +953,11 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
 
         const allSuccess = results.length > 0 && results.every((r) => r.success)
         logger.info(
-            { totalPlatforms: results.length, successCount: results.filter(r => r.success).length, allSuccess },
+            {
+                totalPlatforms: results.length,
+                successCount: results.filter((r) => r.success).length,
+                allSuccess
+            },
             'Push API: Broadcast completed'
         )
         return { success: allSuccess, results }
@@ -1014,7 +1029,12 @@ export async function registerPushApiRoutes(fastify: FastifyInstance): Promise<v
                 const parsed = parseBase64Data(content)
                 buffer = parsed.buffer
                 logger.debug(
-                    { filename, mimeType: parsed.mimeType, size: buffer.length, sizeKB: Math.round(buffer.length / 1024) },
+                    {
+                        filename,
+                        mimeType: parsed.mimeType,
+                        size: buffer.length,
+                        sizeKB: Math.round(buffer.length / 1024)
+                    },
                     'Push API: Parsed base64 content'
                 )
             } else {
