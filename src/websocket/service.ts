@@ -26,9 +26,14 @@ interface WsConfig {
  *
  * 单例模式，管理所有 WebSocket 客户端连接和消息转发
  */
+interface CachedMessage {
+    message: StandardMessage
+    receivedAt: number
+}
+
 class WsMessageService {
     private clients: Map<WebSocket, WsClient> = new Map()
-    private recentMessages: StandardMessage[] = []
+    private recentMessages: CachedMessage[] = []
     private config: WsConfig
     private cleanupInterval: ReturnType<typeof setInterval> | null = null
     private heartbeatCheckInterval: ReturnType<typeof setInterval> | null = null
@@ -250,7 +255,10 @@ class WsMessageService {
     }
 
     private cacheMessage(message: StandardMessage): void {
-        this.recentMessages.push(message)
+        this.recentMessages.push({
+            message,
+            receivedAt: Date.now()
+        })
         this.cleanupOldMessages()
     }
 
@@ -259,20 +267,13 @@ class WsMessageService {
         if (this.recentMessages.length === 0) {
             return null
         }
-        return this.recentMessages[this.recentMessages.length - 1]
+        return this.recentMessages[this.recentMessages.length - 1].message
     }
 
     private cleanupOldMessages(): void {
         const now = Date.now()
         const cutoff = now - this.config.cacheDuration
-        this.recentMessages = this.recentMessages.filter((msg) => {
-            const raw = msg.raw as { timestamp?: number } | undefined
-            const timestamp = raw?.timestamp
-            if (timestamp && typeof timestamp === 'number') {
-                return timestamp > cutoff
-            }
-            return true
-        })
+        this.recentMessages = this.recentMessages.filter((cached) => cached.receivedAt > cutoff)
     }
 
     private startCleanupInterval(): void {
